@@ -1,32 +1,21 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html data-theme="light"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>ProTrack</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
 <style>
 /* Layout: simple mode. Header + lanes, "Do this now" cards, one-line summary, then a 4-column board (Release / Slow / Reroute / Inspect). Details open in a side drawer. */
 :root{
-  --bg:#E9EDF1; --panel:#FFFFFF; --panel-2:#F3F5F8; --ink:#14202B; --muted:#5A6774; --line:#D3DAE1;
-  --accent:#D9480F; --accent-ink:#FFFFFF; --scrim:rgba(14,21,28,.38);
-  --release:#1D7F46; --slow:#9A6A12; --reroute:#1F5FA6; --inspect:#B4322A; --legal:#6A3E9E;
-  --chart-grid:#E1E6EB;
-  --l-hw:#C2410C; --l-net:#1F5FA6; --l-proc:#6A3E9E; --l-app:#1D7F46;
+  --bg:#F6F9FD; --panel:#FFFFFF; --panel-2:#EEF4FB; --ink:#0F1B2D; --muted:#4A5A70; --line:#DDE6F1;
+  --accent:#E4570C; --accent-ink:#FFFFFF; --scrim:rgba(15,27,45,.28);
+  --release:#12A150; --slow:#B7791F; --reroute:#2563EB; --inspect:#DC3545; --legal:#7C3AED;
+  --chart-grid:#E6EDF5; --shadow:0 1px 2px rgba(15,27,45,.04),0 4px 14px rgba(37,99,235,.07);
+  --l-hw:#EA580C; --l-net:#2563EB; --l-proc:#7C3AED; --l-app:#12A150;
   --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
-}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0E151C; --panel:#152029; --panel-2:#1B2832; --ink:#E4EAF0; --muted:#93A1AE; --line:#263541;
-  --accent:#FF7A3D; --accent-ink:#1A0D05; --scrim:rgba(0,0,0,.55);
-  --release:#4CC27E; --slow:#E0A93E; --reroute:#5C9EE8; --inspect:#F06A60; --legal:#B48BE8;
-  --chart-grid:#22313C; --l-hw:#FF8A4C; --l-net:#5C9EE8; --l-proc:#B48BE8; --l-app:#4CC27E; color-scheme:dark;
-}}
-:root[data-theme="dark"]{
-  --bg:#0E151C; --panel:#152029; --panel-2:#1B2832; --ink:#E4EAF0; --muted:#93A1AE; --line:#263541;
-  --accent:#FF7A3D; --accent-ink:#1A0D05; --scrim:rgba(0,0,0,.55);
-  --release:#4CC27E; --slow:#E0A93E; --reroute:#5C9EE8; --inspect:#F06A60; --legal:#B48BE8;
-  --chart-grid:#22313C; --l-hw:#FF8A4C; --l-net:#5C9EE8; --l-proc:#B48BE8; --l-app:#4CC27E; color-scheme:dark;
+  color-scheme:light;
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
@@ -233,11 +222,11 @@ svg.chart{width:100%;height:auto;display:block}
 .js:last-child::before{display:none}
 .js .num{position:absolute;left:0;top:0}
 .js.next .num,.js.skip .num{background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
-.js.now .num,.js.live .num{background:var(--accent);color:var(--accent-ink)}
+.js.now .num,.js.watch .num{background:var(--accent);color:var(--accent-ink)}
 .js.done .num{background:var(--release);color:var(--panel)}
 .jh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-height:24px}
 .jstate{font-size:12px;color:var(--muted);font-weight:600}
-.js.now .jstate,.js.live .jstate{color:var(--accent)}
+.js.now .jstate,.js.watch .jstate{color:var(--accent)}
 .reads{list-style:none;margin:6px 0 6px;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
 .reads li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
 .reads .mono{color:var(--muted);font-size:12px}
@@ -248,21 +237,162 @@ svg.chart{width:100%;height:auto;display:block}
 .sensor{font-size:11px;color:var(--muted)}
 .kind{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 @media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+
+body{background:linear-gradient(180deg,#EAF2FF 0,var(--bg) 280px) fixed,var(--bg)}
+.lanebar,.ncard,.summary,.vs,.col,details.box,.sigpanel,.stage{border-radius:14px;box-shadow:var(--shadow)}
+.summary{gap:0}.stat+.stat{border-left:1px solid var(--line)}
+.ncard:hover,.stage:hover{border-color:var(--accent);transform:translateY(-1px)}
+.ncard,.stage{transition:transform .12s,border-color .12s}
+.ncard.top{background:linear-gradient(180deg,#FFF4EC,var(--panel));box-shadow:0 0 0 1px var(--accent),var(--shadow)}
+.btn{border-radius:10px;box-shadow:0 1px 2px rgba(15,27,45,.06)}
+.btn:hover{background:var(--panel-2);border-color:var(--reroute)}
+.speed{border-radius:10px;box-shadow:0 1px 2px rgba(15,27,45,.06)}
+.seg[aria-pressed="true"]{background:var(--reroute);color:#fff}
+.colhead{background:color-mix(in srgb,var(--c) 7%,#fff)}
+.card:hover{background:color-mix(in srgb,var(--c) 6%,#fff)}
+.drawer{box-shadow:-12px 0 40px rgba(15,27,45,.12)}
+.chip[aria-pressed="true"]{background:var(--reroute);border-color:var(--reroute)}
+
+.redbar,.alertbar{background:#C62828;color:#fff;border-radius:12px;padding:12px 16px;font-weight:600;box-shadow:0 4px 14px rgba(198,40,40,.25)}
+.alertbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}.alertbar:empty{display:none}
+.alertbar b{font-family:var(--f-display);font-size:18px;letter-spacing:.05em;text-transform:uppercase}
+.alertbar button{background:#fff;color:#C62828;border:0;border-radius:999px;padding:3px 10px;font-family:var(--f-mono);font-weight:600;font-size:12.5px}
+.redbar{font-size:13.5px}
+.wcard,.rpanel{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel-2)}
+.wcard.crit{border-color:var(--inspect);background:color-mix(in srgb,var(--inspect) 6%,#fff)}
+.wgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}
+.wgrid div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.wgrid small{display:block;color:var(--muted);font-size:11.5px;font-weight:600}.wgrid b{font-family:var(--f-mono);font-size:15px}
+.fm{font-family:var(--f-mono);font-size:12px;color:var(--ink);margin:6px 0;overflow-wrap:anywhere}
+.note{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.st{font-family:var(--f-display);font-weight:700;letter-spacing:.05em;text-transform:uppercase}.st.crit{color:var(--inspect)}.st.warn{color:var(--slow)}.st.ok{color:var(--release)}
+.procs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.procs li{display:grid;grid-template-columns:24px 1fr;gap:10px}
+.procs .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+.procs .done .n{background:var(--release);color:#fff;border-color:var(--release)}.procs .now .n{background:var(--accent);color:#fff;border-color:var(--accent)}.procs .fail .n{background:var(--inspect);color:#fff;border-color:var(--inspect)}
+.procs b{display:block}.procs span.d{color:var(--muted);font-size:13.5px}
+.resbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.resbar select{font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:#fff;max-width:100%}
+.resbar button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;font-weight:700}
+.resbar .PASS{color:var(--release)}.resbar .FAIL{color:var(--inspect)}
+.pair{display:grid;grid-template-columns:1fr;gap:10px}.rpanel h5{margin:0 0 6px;font-family:var(--f-display);font-size:15px;letter-spacing:.06em;text-transform:uppercase}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px;margin:0}.kv dt{color:var(--muted)}.kv dd{margin:0;font-weight:600}
+.tag.stale{color:var(--inspect)}
+details.routes{margin-top:4px}details.routes>summary{cursor:pointer;font-size:12px;color:var(--muted);font-weight:600}details.routes[open]>summary{margin-bottom:4px}
+.js.blocked .num{background:var(--inspect);color:#fff}.js.blocked .jstate{color:var(--inspect)}
+.jcond{font-size:13px;color:var(--muted);margin:2px 0 4px}
+
+/* ===== ProTrack identity: Tesla-style ===== */
+:root{--f-display:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--f-mono:"Inter",system-ui,sans-serif}
+:root[data-theme="dark"]{
+  color-scheme:dark;--bg:#0A0B0D;--panel:#15171A;--panel-2:#1D2024;--ink:#F4F5F6;--muted:#8D939B;--line:#2A2E34;
+  --accent:#3E6AE1;--accent-ink:#fff;--scrim:rgba(0,0,0,.6);--shadow:none;
+  --release:#3DDC84;--slow:#F5B83D;--reroute:#5B8DEF;--inspect:#FF4D5E;--legal:#A78BFA;--chart-grid:#262A30;
+  --l-hw:#FF9A5C;--l-net:#5B8DEF;--l-proc:#A78BFA;--l-app:#3DDC84}
+:root[data-theme="light"]{color-scheme:light;--bg:#F4F4F4;--panel:#FFFFFF;--panel-2:#F2F3F5;--ink:#171A20;--muted:#5C5E62;--line:#E3E4E6;
+  --scrim:rgba(23,26,32,.35);--release:#0F9D58;--slow:#B7791F;--reroute:#3E6AE1;--inspect:#D92D3F;--legal:#7C3AED;--chart-grid:#E8EAEC;
+  --l-hw:#D9480F;--l-net:#3E6AE1;--l-proc:#7C3AED;--l-app:#0F9D58}
+*{font-variant-numeric:tabular-nums}
+body{font-weight:400;letter-spacing:.005em;background:radial-gradient(900px 420px at 50% -120px,color-mix(in srgb,var(--accent) 16%,transparent),transparent),var(--bg) fixed}
+header{position:sticky;top:calc(8px + env(safe-area-inset-top,0px));z-index:10;padding:10px 18px;border:1px solid var(--line);border-radius:20px;background:color-mix(in srgb,var(--panel) 78%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.brand{align-items:center;gap:14px}.logo{width:30px;height:30px;color:var(--ink)}
+.brand h1{font-weight:300;font-size:22px;letter-spacing:.34em}.brand h1 span{color:var(--ink);font-weight:600}
+.clock{font-weight:300;font-size:30px;letter-spacing:.02em}.clock small{font-size:12px;letter-spacing:.04em}
+h2.sec{font-size:12px;font-weight:600;letter-spacing:.18em;color:var(--muted)}
+.sechead p{font-size:13px}
+.lanebar,.ncard,.summary,.vs,.col,details.box,.sigpanel,.stage{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:none}
+.summary{background:var(--line)}.stat{background:var(--panel);padding:16px 18px}.stat+.stat{border-left:0}
+.stat .k{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-size:38px;font-weight:300;letter-spacing:-.01em;margin-top:4px}
+.ncard{padding:18px 20px;gap:10px}.ncard .what{font-size:20px;font-weight:500;letter-spacing:-.005em}.ncard .id{font-weight:500;color:var(--muted);font-size:13px}
+.ncard.top{background:color-mix(in srgb,var(--accent) 12%,var(--panel));border-color:var(--accent);box-shadow:none}
+.ncard .go{color:var(--accent);letter-spacing:.04em}
+.btn,.seg,.close,.chip,.ovb,.resbar button{border-radius:8px}
+.btn{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:500;box-shadow:none}
+.btn:hover{background:var(--panel-2);border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.speed{border-radius:10px;background:var(--panel-2);border:0;padding:3px;gap:2px}.seg{border:0;border-radius:8px;color:var(--muted);padding:7px 12px}
+.seg[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.lane{background:var(--panel-2);border:0}
+.colhead{background:none;border-top:0;padding:16px 18px 12px;border-bottom:0}
+.colhead h3{font-size:12px;font-weight:600;letter-spacing:.18em}.colhead h3::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:9px;vertical-align:1px}
+.colhead .n{font-size:26px;font-weight:300}.cards{border-top:1px solid var(--line)}
+.card{padding:12px 18px}.card:hover{background:var(--panel-2)}.card .id{font-weight:500;font-size:13.5px}
+.pill{font-size:11px;font-weight:600;letter-spacing:.12em;border-radius:999px;padding:4px 11px}
+.stage{padding:16px}.stage.on,.stage:hover{border-color:var(--accent);box-shadow:none}.nm{font-size:13px;font-weight:600;letter-spacing:.12em}
+.num{background:var(--ink);color:var(--bg)}
+.chip[aria-pressed="true"],.seg[aria-pressed="true"].x{background:var(--accent);border-color:var(--accent);color:#fff}
+.drawer{background:color-mix(in srgb,var(--panel) 94%,transparent);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);box-shadow:-24px 0 60px rgba(0,0,0,.35);border-left:1px solid var(--line)}
+.dtop .id{font-size:26px;font-weight:300;letter-spacing:.02em}
+.verdict{border-radius:16px}.dsec h4{font-size:11px;font-weight:600;letter-spacing:.18em}
+.wcard,.rpanel{background:var(--panel-2);border-radius:16px}.wcard.crit{background:color-mix(in srgb,var(--inspect) 10%,var(--panel));border-color:var(--inspect)}
+.wgrid div{background:var(--panel);border-color:var(--line);border-radius:12px}.wgrid b{font-size:18px;font-weight:500}
+.resbar select,.resbar button{background:var(--panel-2);color:var(--ink);border-color:var(--line)}
+.alertbar,.redbar{background:#E31937;color:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(227,25,55,.3)}.alertbar b{font-family:var(--f-body);font-size:13px;font-weight:600;letter-spacing:.16em}
+.alertbar button{color:#E31937}
+.procs .n{border-radius:50%}.st{font-family:var(--f-body);font-size:11px;font-weight:600;letter-spacing:.12em}
+.hwchip,.pc{border-radius:999px}
+details.box>summary{padding:16px 20px}.how b{font-size:12px;letter-spacing:.16em}
+.foot{text-align:center;padding:8px}
+/* ===== Light touchscreen cockpit (default) ===== */
+:root[data-theme="light"]{--bg:#EDEEF0;--panel-2:#F4F5F7;--line:#E6E8EB;--scrim:rgba(23,26,32,.2);--shadow:0 1px 2px rgba(23,26,32,.04),0 8px 24px rgba(23,26,32,.06)}
+[data-theme="light"] body{background:var(--bg)}
+[data-theme="light"] .wrap{gap:20px}
+[data-theme="light"] header{border:0;border-radius:30px;padding:12px 14px 12px 24px;background:rgba(255,255,255,.88);box-shadow:var(--shadow)}
+[data-theme="light"] :is(.lanebar,.ncard,.vs,.col,details.box,.sigpanel,.stage){border:0;border-radius:28px;box-shadow:var(--shadow)}
+[data-theme="light"] .summary{background:var(--panel);border:0;border-radius:28px;box-shadow:var(--shadow);gap:0}
+[data-theme="light"] .stat{padding:20px 24px}[data-theme="light"] .stat+.stat{border-left:1px solid var(--line)}
+[data-theme="light"] .stat .v{font-size:36px;font-weight:300}
+[data-theme="light"] .ncard{padding:22px 24px}
+[data-theme="light"] .ncard.top{background:#fff;box-shadow:inset 0 0 0 2px var(--accent),var(--shadow)}
+[data-theme="light"] .stage.on,[data-theme="light"] .stage:hover{box-shadow:inset 0 0 0 2px var(--accent),var(--shadow)}
+[data-theme="light"] .stage.ship{background:var(--panel-2);box-shadow:none}
+[data-theme="light"] :is(.btn,.close,.chip,.resbar button,.resbar select){border-radius:999px;min-height:44px;padding-inline:20px}
+[data-theme="light"] .btn{border:0;background:var(--panel-2)}[data-theme="light"] .btn:hover{background:#E8EAEE}
+[data-theme="light"] .btn.primary{background:var(--accent);color:#fff}
+[data-theme="light"] .chip{border:0;min-height:36px;padding-inline:16px}
+[data-theme="light"] .speed{border-radius:999px;padding:4px}
+[data-theme="light"] .seg{border-radius:999px;min-height:40px;padding:0 16px}
+[data-theme="light"] .seg[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(23,26,32,.16)}
+[data-theme="light"] .lane{min-height:38px;padding:0 16px 0 12px;text-decoration:none}
+[data-theme="light"] .cards{border-top:0;padding:0 8px 10px}[data-theme="light"] .card{border:0;border-radius:16px;padding:12px 12px}
+[data-theme="light"] .colhead{padding:18px 20px 12px}
+[data-theme="light"] .drawer{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border:0;border-radius:32px 0 0 32px;gap:14px;width:min(580px,100%);box-shadow:-20px 0 60px rgba(23,26,32,.14)}
+@media(max-width:560px){[data-theme="light"] .drawer{border-radius:0}}
+[data-theme="light"] .scrim{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+[data-theme="light"] .drawer>.dsec,[data-theme="light"] .drawer>.pair>.dsec{background:var(--panel);border-radius:24px;padding:18px 20px;box-shadow:var(--shadow)}
+[data-theme="light"] .drawer>.pair{display:flex;flex-direction:column;gap:14px}
+[data-theme="light"] .drawer>details.sub{background:var(--panel);border:0;border-radius:24px;padding:16px 20px;box-shadow:var(--shadow)}
+[data-theme="light"] .close{background:#fff;border:0}
+[data-theme="light"] .verdict{border:0;border-radius:24px;padding:18px 20px;background:color-mix(in srgb,var(--c) 11%,#fff)}
+[data-theme="light"] .verdict .dest{font-size:19px;font-weight:600}
+[data-theme="light"] :is(.wcard,.rpanel){border:0;border-radius:18px}
+[data-theme="light"] .wcard.crit{background:color-mix(in srgb,var(--inspect) 7%,#fff)}
+[data-theme="light"] .wgrid div{border:0;border-radius:14px}
+[data-theme="light"] .ovb{border:0;background:var(--panel-2);border-radius:14px;min-height:46px}
+[data-theme="light"] .ovb[aria-pressed="true"]{background:color-mix(in srgb,currentColor 12%,#fff);box-shadow:inset 0 0 0 2px currentColor}
+[data-theme="light"] .resbar :is(select,button){border:0;background:var(--panel-2)}
+[data-theme="light"] :is(.alertbar,.redbar){background:#CF2E3B;border-radius:22px;box-shadow:0 6px 20px rgba(207,46,59,.22)}
+[data-theme="light"] .alertbar button{color:#CF2E3B}
+button,.card,.ncard,.stage,.lane,.pill,.tag{transition:background-color .25s,color .25s,box-shadow .25s,border-color .25s,opacity .25s}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.procs span.d{display:block}.procs .d b{display:inline}
+.idt{white-space:nowrap;margin-right:4px}
+.tag.bay{color:var(--muted)}.tag.res-PASS{color:var(--release)}.tag.res-FAIL{color:var(--inspect)}.tag.res-PENDING{color:var(--slow)}
 </style>
 
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1>Pro<span>Track</span></h1>
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 22c5 0 4-12 9-12h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="8" cy="22" r="2.4" fill="currentColor"/><circle cx="24" cy="10" r="2.4" fill="var(--accent)"/></svg><h1>PRO<span>TRACK</span></h1>
       <div class="clock" id="clock"></div>
     </div>
     <div class="controls">
       <div class="speed" id="speed" role="group" aria-label="Clock speed"></div>
-      <button class="btn primary" id="step5" data-step="1">Skip 5 min</button>
-      <button class="btn" id="step30" data-step="6">Skip 30 min</button>
+      <button class="btn" id="themeBtn" data-themetoggle="1">Dark</button>
       <button class="btn" id="reset" data-reset="1">Reset</button>
     </div>
   </header>
+  <div class="alertbar" id="alert" role="alert"></div>
 
   <div class="lanebar" id="lanes"></div>
 
@@ -532,7 +662,7 @@ function step(s,policy,log){
       if(wasOff)addTrace(s,b,3,"probe",`Plugged into rack power at ${deg(b.temp)}`);
     });
     for(const b of s.boxes){
-      if(b.status==="side"&&!b.hold){b.sideT=(b.sideT||0)+TICK;
+      if(b.status==="side"&&!b.hold&&!isOpenInsp(b,analyze(b,ctx))){b.sideT=(b.sideT||0)+TICK;
         if(b.sideT>=15){
           const a=analyze(b,ctx);
           if(a.flags.reweigh)addTrace(s,b,2,"scale",`Re-weighed on ${ctx.goodScale}: ${kg(b.real)} · matches VGM, ${b.scaleId} was wrong`);
@@ -695,29 +825,98 @@ function renderSignals(){
       <span class="mono t">${clock(e.t)}</span>
       <span class="sb s${e.stage}">${e.stage}</span>
       <div class="body"><div><b>${DEV[e.dev]}</b> · <button class="idlink" data-open="${esc(e.id)}">${esc(e.id)}</button></div>
-        <div class="txt">${esc(e.text)}</div>${pathHtml(e.dev,e.id)}</div>
-    </li>`).join(""):`<li class="none">No signals at this stage yet. Wait, or skip ahead.</li>`;
+        <div class="txt">${esc(e.text)}</div>${routes([e.dev],e.id)}</div>
+    </li>`).join(""):`<li class="none">No signals at this stage yet. Check back shortly.</li>`;
 }
-function journeyHtml(b){
-  const st=b.status, tr=b.trace||[];
-  const state=n=>{
-    if(n===1)return "done";
-    if(n===2)return st==="queue"?"now":st==="side"?"now":"done";
-    if(n===3)return !b.reefer?"skip":st==="loaded"?"done":"live";
-    if(n===4)return st==="gated"?"now":st==="loaded"?"done":"next";
-    return st==="loaded"?"done":"next";
-  };
-  const label={done:"Done",now:"Here now",live:"Live",next:"Not yet",skip:"Dry box, not needed"};
-  const rows=STAGES.map(s=>{
-    const k=state(s.n);
-    let ev=tr.filter(e=>e.stage===s.n);
-    if(s.n===3)ev=ev.slice(-4);
+const STALE_MIN=15, BAND=1.0, OPS=["A. Rivera, Terminal Inspector","K. Osei, Duty Supervisor","M. Tanaka, Terminal Inspector"];
+let opSel="", opNote="";
+const INS=id=>((S.insp=S.insp||{})[id]=S.insp[id]||{result:"PENDING"});
+const evsOf=(b,d)=>(b.trace||[]).filter(e=>d.includes(e.dev));
+const lastEv=(b,d)=>{const l=evsOf(b,d);return l[l.length-1]};
+function bayOf(b){const e=(b.trace||[]).find(x=>/inspection bay/i.test(x.text));const m=e&&e.text.match(/IB-\d/);return m?{bay:m[0],t:e.t}:null}
+function failReason(b,a){return a.flags.vgm?"Weight check failed: VGM mismatch":b.hold?"Customs hold: "+b.holdReason:a.flags.misdeclared?"Declared empty, measured loaded":"Inspection required"}
+const isOpenInsp=(b,a)=>!["gated","loaded","returned","rejected"].includes(b.status)&&a.action==="INSPECT"&&INS(b.id).result!=="PASS";
+function stageStates(b,a){
+  const st=b.status,done=st==="gated"||st==="loaded",blocked=!done&&(b.hold||isOpenInsp(b,a));
+  const rel=b.vgm?(b.scale-b.vgm)/b.vgm:0;
+  return [
+    ["Completed",a.flags.ocr?`Identity uncertain (OCR ${b.ocr.toFixed(2)}), clerk to confirm`:"Identity captured"],
+    done?["Completed","Weight verified"]:blocked?["Blocked / inspection",a.flags.vgm?`Weight discrepancy ${pct(rel)}`:b.hold?"Customs hold":a.flags.misdeclared?"Declared empty, measured loaded":"Inspection required"]:a.flags.reweigh?["In progress","Re-weigh needed"]:["In progress","Within tolerance, awaiting gate"],
+    !b.reefer?["N/A","Dry box, no monitoring"]:st==="loaded"?["Completed","Monitoring ended at load-out"]:["Active",b.power&&!b.fault?"Powered; temperature monitored":"No power or unit fault; temperature monitored, rising"],
+    st==="loaded"?["Completed","Left the yard"]:st==="gated"?["In progress","In the yard"]:["Pending",blocked?"Awaiting inspection clearance":"Awaiting gate-through"],
+    st==="loaded"?["Completed","Loaded on the ship"]:["Pending",blocked?"Awaiting inspection clearance and downstream authorization":"Awaiting downstream authorization"]
+  ];
+}
+const PCLS={"Completed":"done","Blocked / inspection":"blocked","Active":"watch","In progress":"now","Pending":"next","N/A":"skip"};
+function routes(devs,id){return devs.length?`<details class="routes"><summary>Data routes (${devs.length})</summary><div class="jpaths">${devs.map(d=>pathHtml(d,id)).join("")}</div></details>`:""}
+function journeyHtml(b,a){
+  const tr=b.trace||[],ss=stageStates(b,a);
+  return `<ol class="journey">${STAGES.map((s,i)=>{
+    const [p,c]=ss[i];let ev=tr.filter(e=>e.stage===s.n);if(s.n===3)ev=ev.slice(-4);
     const devs=[...new Set(ev.map(e=>e.dev))];
-    return `<li class="js ${k}"><div class="jh"><span class="num">${s.n}</span><b>${s.name}</b><span class="jstate">${label[k]}</span></div>
-      ${ev.length?`<ul class="reads">${ev.map(e=>`<li><span class="mono">${clock(e.t)}</span><span><i>${DEV[e.dev]}</i> ${esc(e.text)}</span></li>`).join("")}</ul>
-      <div class="jpaths">${devs.map(d=>pathHtml(d,b.id)).join("")}</div>`:`<div class="jempty">${k==="skip"?"":"No readings yet"}</div>`}
-    </li>`}).join("");
-  return `<ol class="journey">${rows}<li class="js ${st==="loaded"?"done":"next"}"><div class="jh"><span class="num">✓</span><b>On the ship</b><span class="jstate">${st==="loaded"?"Loaded at "+clock(b.loadedAt):b.hold?"Blocked by customs hold":"Not yet"}</span></div></li></ol>`;
+    return `<li class="js ${PCLS[p]}"><div class="jh"><span class="num">${s.n}</span><b>${s.name}</b><span class="jstate">${p}</span></div>
+      <div class="jcond">${esc(c)}</div>
+      ${ev.length?`<ul class="reads">${ev.map(e=>`<li><span class="mono">${clock(e.t)}</span><span><i>${DEV[e.dev]}</i> ${esc(e.text)}</span></li>`).join("")}</ul>${routes(devs,b.id)}`:""}
+    </li>`}).join("")}</ol>`;
+}
+function weightCard(b,a,ctx){
+  if(!b.vgm)return"";
+  const d=b.scale-b.vgm,rel=d/b.vgm,sh=ctx.scales[b.scaleId];
+  const s=a.flags.vgm?["crit","FAILED"]:a.flags.reweigh?["warn","RE-WEIGH"]:["ok","PASSED"];
+  const se=lastEv(b,["scale"]),lc=lastEv(b,["cell"]);
+  const row=(n,v,src,t,val)=>`<tr><td><b>${n}</b></td><td class="r">${v}</td><td>${src}</td><td>${t}</td><td>${val}</td></tr>`;
+  return `<div class="dsec"><h4>Weight check <span class="st ${s[0]}">${s[1]}</span></h4><div class="wcard ${s[0]==="crit"?"crit":""}">
+    <div class="wgrid"><div><small>Weighbridge ${esc(b.scaleId)}</small><b>${kg(b.scale)}</b></div><div><small>Declared VGM</small><b>${kg(b.vgm)}</b></div><div><small>Difference</small><b>${d>=0?"+":"−"}${kg(Math.abs(d))}</b></div></div>
+    <div class="fm">Deviation = (Weighbridge − VGM) ÷ VGM = (${kg(b.scale)} − ${kg(b.vgm)}) ÷ ${kg(b.vgm)} = <b>${pct(rel)}</b></div>
+    <p class="note">Reference weight: declared VGM. Sign: minus means the scale reads lighter. Tolerance: ±5%. Against the scale reading the same gap is ${(Math.abs(d)/b.scale*100).toFixed(1)}%, shown only for comparison.</p>
+    <p class="note"><b>Comparable?</b> Only container-only weight (box + cargo) may be compared with VGM. A weighbridge gross includes the tractor and chassis. This simulation treats the scale value as tare-subtracted at the gate; a live feed must supply that tare-weigh or the check is not valid.</p>
+    <div class="tablewrap"><table class="src"><thead><tr><th>Value</th><th>Reading</th><th>Source</th><th>Time</th><th>Validation</th></tr></thead><tbody>
+    ${row("Scale",kg(b.scale),esc(b.scaleId)+" weighbridge",se?clock(se.t):"n/a",sh.suspect?`<span class="trust sus">Suspect: reads ${pct(sh.median-1)} high this shift</span>`:`<span class="trust hi">Calibrated, in line with shift</span>`)}
+    ${row("VGM",kg(b.vgm),"Shipper, via carrier EDI","With booking, before arrival",`<span class="trust lo">Declared, not independently verified</span>`)}
+    ${row("Load cell",b.loadCell?kg(b.loadCell):"Not lifted yet","Spreader load cell",lc?clock(lc.t):"At load-out",b.loadCell?`<span class="trust hi">Independent second sensor</span>`:`<span class="trust na">Pending</span>`)}
+    </tbody></table></div></div></div>`;
+}
+function processHtml(b,a){
+  const r=INS(b.id),bay=bayOf(b),pl=b.reefer?"IB-2":"IB-1",res=r.result;
+  const inband=Math.abs(b.temp-b.setpoint)<=BAND;
+  const L=[["done","Flag the discrepancy",failReason(b,a)+(a.flags.vgm?". Weight check marked FAILED.":".")],
+    [bay?"done":"now","Assign the inspection bay",bay?`${bay.bay} · moved ${clock(bay.t)}. Held here until an authorized movement is recorded.<br>${locLine(b)}`:`${pl} planned · move not logged yet`]];
+  if(b.reefer)L.push([b.power&&!b.fault?"done":"now","Maintain reefer power",b.power&&!b.fault?`Plugged in, ${deg(b.temp)} (set ${deg(b.setpoint)}), ${inband?"in band":"outside band: watch"}`:`Plug into bay power now. ${deg(b.temp)}, rising`]);
+  const form=`<div class="resbar"><select id="opSel" aria-label="Authorized inspector"><option value="">Select authorized inspector…</option>${OPS.map(o=>`<option ${o===opSel?"selected":""}>${esc(o)}</option>`).join("")}</select>
+    ${["PASS","FAIL","PENDING"].map(x=>`<button class="${x}" data-res="${x}">${x[0]+x.slice(1).toLowerCase()}</button>`).join("")}</div>${opNote?`<div class="ovnote" style="color:var(--inspect)">${opNote}</div>`:""}<div class="ovnote">Roster is simulated; connect it to your access control.</div>`;
+  L.push([res==="PENDING"?"now":res==="FAIL"?"fail":"done","Record the inspection result",`Result: <b>${res}</b>${r.operator?` · ${esc(r.operator)} · ${clock(r.at)}`:" · no operator yet"}${form}`]);
+  L.push([res==="PASS"&&!b.hold?"done":res==="PASS"||res==="FAIL"?"now":"wait","Release or continue the hold",res==="PASS"?(b.hold?`Inspection passed. Customs still holds the box (${esc(b.holdReason)}); only customs can lift it.<div class="resbar"><button data-customs="1">Simulate customs release</button></div>`:"Cleared. Moving to the yard."):(res==="FAIL"?failBlock(b,a):"Hold continues. Yard and load-out stay blocked until an authorized PASS is recorded.")]);
+  return `<div class="dsec"><h4>Inspection process</h4><ol class="procs">${L.map((s,i)=>`<li class="${s[0]}"><span class="n">${i+1}</span><div><b>${s[1]}</b><span class="d">${s[2]}</span></div></li>`).join("")}</ol></div>`;
+}
+function reeferPanel(b){
+  if(!b.reefer)return"";
+  const lim=limitOf(b),dev=b.temp-b.setpoint;
+  const t=b.temp>=lim?["crit","ALARM: past limit"]:Math.abs(dev)>BAND?["warn","OUT OF BAND"]:["ok","IN RANGE"];
+  const pw=!b.power?["crit","No power"]:b.fault?["crit","Unit fault"]:["ok","Powered"];
+  const pe=lastEv(b,["probe"]);
+  return `<div class="dsec"><h4>Temperature monitoring</h4><div class="rpanel"><dl class="kv">
+    <dt>Reading</dt><dd>${deg(b.temp)} <span class="st ${t[0]}">${t[1]}</span></dd><dt>Setpoint</dt><dd>${deg(b.setpoint)}</dd>
+    <dt>Acceptable range</dt><dd>${deg(b.setpoint-BAND)} to ${deg(b.setpoint+BAND)} (alarm at ${deg(lim)})</dd>
+    <dt>Power</dt><dd><span class="st ${pw[0]}">${pw[1]}</span></dd><dt>Last probe reading</dt><dd>${pe?clock(pe.t)+(S.t-pe.t>STALE_MIN?' <span class="tag stale">STALE</span>':""):"none yet"}</dd></dl>
+    ${routes(["probe"],b.id)}<p class="note">Probe interface shown as BLE as assumed in this simulation. Verify the real interface (many reefers report through the unit's own controller or modem); if it is not BLE, replace the radio hop.</p>
+    ${reeferChart(b)}</div></div>`;
+}
+function blePanel(b){
+  if(!(b.reefer||b.hold))return"";
+  const pair=lastEv(b,["ble"]),tag=pair&&(pair.text.match(/BT-\d+/)||[])[0],det=lastEv(b,["ble","probe"]),bay=bayOf(b);
+  const stale=!det||S.t-det.t>STALE_MIN;
+  return `<div class="dsec"><h4>Location tracking (BLE)</h4><div class="rpanel"><dl class="kv">
+    <dt>Tag / container</dt><dd>${tag||"none"} · ${esc(b.id)}</dd>
+    <dt>Tag paired</dt><dd><span class="st ${pair?"ok":"crit"}">${pair?"PAIRED":"NOT PAIRED"}</span>${pair?" at "+clock(pair.t):""}</dd>
+    <dt>Location detected</dt><dd><span class="st ${stale?"crit":"ok"}">${stale?"NOT CURRENT":"DETECTED"}</span></dd>
+    <dt>Last detection</dt><dd>${det?clock(det.t)+" by "+gatewayFor(b):"none"}${stale?' <span class="tag stale">STALE</span>':""}</dd>
+    <dt>Last known location</dt><dd>${bay?"Inspection bay "+bay.bay+" (move logged "+clock(bay.t)+")":"Within range of "+gatewayFor(b)+" only"}</dd>
+    <dt>Signal quality</dt><dd>Not reported by this tag type</dd></dl>
+    ${routes(["ble"],b.id)}<p class="note">A paired tag does not mean the location is known: pairing and detection are tracked separately. Stale after ${STALE_MIN} min without a detection.</p></div></div>`;
+}
+function renderAlert(A){
+  const o=S.boxes.filter(b=>isOpenInsp(b,A.get(b.id))).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
+  $("alert").innerHTML=o.length?`<b>${o.length} inspection${o.length>1?"s":""} open</b><span>Stays active until an authorized result is recorded.</span>${o.slice(0,4).map(b=>`<button data-open="${esc(b.id)}">${esc(b.id)}</button>`).join("")}${o.length>4?`<span>+${o.length-4} more in the Inspect column</span>`:""}`:"";
 }
 
 /* ---------- state ---------- */
@@ -763,7 +962,10 @@ function reasons(b,a){
 }
 function reason(b,a){return reasons(b,a)[0]}
 function headline(b,act,a,ctx,lane){
-  if(act==="INSPECT")return b.reefer?"Plug in, then hold for inspection":"Pull aside for inspection";
+  const ir=S.insp&&S.insp[b.id];
+  if(act==="INSPECT"&&ir&&ir.result==="PASS"&&b.hold)return "Inspection passed. Waiting for customs to release";
+  if(act==="INSPECT"&&ir&&ir.result==="FAIL")return "Inspection failed. Keep on hold and tell the shipper";
+  if(act==="INSPECT")return b.reefer?(b.power&&!b.fault?"Hold in the powered bay for inspection":"Plug in, then hold for inspection"):"Pull aside for inspection";
   if(act==="REROUTE")return (b.reefer&&!a.flags.reweigh)?"Fast-track to a powered rack":`Re-weigh at ${ctx.goodScale}`;
   if(act==="SLOW")return a.flags.ocr?"Clerk confirms the number":"Give it a later slot";
   return `Send through ${lane||"the next open lane"}`;
@@ -776,6 +978,7 @@ function render(){
   const laneFor={};Object.entries(plan.next).forEach(([l,it])=>{laneFor[it.b.id]=l});
   renderClock();
   renderLanes(ctx);
+  renderAlert(A);
   renderNow(ctx,A,laneFor);
   renderSummary(A);
   renderStages();
@@ -795,7 +998,7 @@ function renderLanes(ctx){
 
 function renderNow(ctx,A,laneFor){
   const top=S.boxes.filter(b=>b.status==="queue").sort((x,y)=>A.get(y.id).score-A.get(x.id).score).slice(0,3);
-  if(!top.length){$("now").innerHTML=`<div class="ncard"><div class="what">Nothing urgent</div><div class="why">Every waiting box has a decision. Wait, or skip ahead to keep the gate moving.</div></div>`;return}
+  if(!top.length){$("now").innerHTML=`<div class="ncard"><div class="what">Nothing urgent</div><div class="why">Every waiting box has a decision. Check back as the gate keeps moving.</div></div>`;return}
   $("now").innerHTML=top.map((b,i)=>{
     const a=A.get(b.id),act=actionOf(S,b,a);
     return `<button class="ncard ${i===0?"top":""}" data-open="${esc(b.id)}">
@@ -813,8 +1016,9 @@ function renderSummary(A){
   const loaded=S.boxes.filter(b=>b.status==="loaded").length;
   const risk=S.boxes.filter(b=>b.reefer&&((!b.power||b.fault)&&A.get(b.id).mtb<120||b.temp>=limitOf(b))).length;
   const charges=S.boxes.reduce((s,b)=>s+b.charges,0);
+  const held=S.boxes.filter(b=>!["gated","loaded","returned","rejected"].includes(b.status)&&actionOf(S,b,A.get(b.id))==="INSPECT").length;
   $("summary").innerHTML=[
-    ["Waiting at gate",q,""],["In the yard",gated,""],["On the ship",loaded,""],["Reefers at risk",risk,risk?"bad":""],["Charges so far",usd(charges),""]
+    ["Waiting at gate",q,""],["In the yard",gated,""],["On the ship",loaded,""],["Held in inspection",held,held?"bad":""],["Reefers at risk",risk,risk?"bad":""],["Charges so far",usd(charges),""]
   ].map(([k,v,c])=>`<div class="stat ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
   const h=project(S,"hold"),t=project(S,"triage");
   const cls=(good)=>good?"good":"bad";
@@ -828,13 +1032,13 @@ function renderSummary(A){
 
 function renderBoard(ctx,A){
   const groups={RELEASE:[],SLOW:[],REROUTE:[],INSPECT:[]};
-  for(const b of S.boxes){if(b.status==="gated"||b.status==="loaded")continue;groups[actionOf(S,b,A.get(b.id))].push(b)}
+  for(const b of S.boxes){if(["gated","loaded","returned","rejected"].includes(b.status))continue;groups[actionOf(S,b,A.get(b.id))].push(b)}
   $("board").innerHTML=COLS.map(([k,name,desc])=>{
     const list=groups[k].sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
     return `<div class="col c-${k}">
       <div class="colhead"><div class="t"><h3>${k}</h3><span class="n">${list.length}</span></div><p>${name}. ${desc}</p></div>
       <div class="cards">${list.length?list.map(b=>{const a=A.get(b.id);
-        return `<button class="card" data-open="${esc(b.id)}"><span class="id">${esc(b.id)}${b.reefer?'<span class="tag rf">RF</span>':""}${b.hold?'<span class="tag hold">HOLD</span>':""}${b.status==="side"?'<span class="tag off">ASIDE</span>':""}${S.overrides[b.id]?'<span class="tag man">YOU</span>':""}</span><span class="sc">${a.score}</span><span class="why">${reason(b,a)}</span></button>`}).join(""):`<div class="emptycol">No boxes here.</div>`}</div>
+        return `<button class="card" data-open="${esc(b.id)}"><span class="id"><span class="idt">${esc(b.id)}</span>${b.reefer?'<span class="tag rf">RF</span>':""}${b.hold?'<span class="tag hold">HOLD</span>':""}${b.status==="side"?'<span class="tag off">ASIDE</span>':""}${S.overrides[b.id]?'<span class="tag man">YOU</span>':""}${k==="INSPECT"?inspChip(b):""}</span><span class="sc">${a.score}</span><span class="why">${reason(b,a)}</span></button>`}).join(""):`<div class="emptycol">No boxes here.</div>`}</div>
     </div>`}).join("");
 }
 
@@ -846,26 +1050,32 @@ function renderDrawer(ctx,A,laneFor){
   const host=$("drawerHost");
   if(!openId){host.innerHTML="";document.body.classList.remove("locked");return}
   const b=S.boxes.find(x=>x.id===openId);const a=A.get(b.id);const act=actionOf(S,b,a);
-  const lane=laneFor[b.id];const done=b.status==="gated"||b.status==="loaded";
-  const status=b.status==="loaded"?`On the ship since ${clock(b.loadedAt)}`:done?(b.lane==="side"?`Cleared to yard at ${clock(b.gatedAt)}`:`Through ${b.lane} at ${clock(b.gatedAt)}`):b.status==="side"?"Pulled aside, off the gate":lane?`Next on ${lane}`:"Waiting at gate";
+  const gone=b.status==="returned"||b.status==="rejected";const lane=laneFor[b.id];const done=b.status==="gated"||b.status==="loaded"||gone;
+  const status=gone?`${b.status==="returned"?"Returned to shipper":"Cargo rejected"} at ${clock(b.exitAt)}`:b.status==="loaded"?`On the ship since ${clock(b.loadedAt)}`:done?(b.lane==="side"?`Cleared to yard at ${clock(b.gatedAt)}`:`Through ${b.lane} at ${clock(b.gatedAt)}`):b.status==="side"?"Pulled aside, off the gate":lane?`Next on ${lane}`:"Waiting at gate";
   const p=a.parts;const ovr=S.overrides[b.id];
   const scrollTop=host.querySelector(".drawer")?.scrollTop||0;
   const openDet=[...host.querySelectorAll("details.sub")].map(d=>d.open);
+  const locked=!done&&isOpenInsp(b,a);
+  const lastT=(b.trace&&b.trace.length)?b.trace[b.trace.length-1].t:null;
+  const stale=lastT!==null&&!done&&S.t-lastT>STALE_MIN;
+  const inspMode=!done&&(a.action==="INSPECT"||act==="INSPECT");
   host.innerHTML=`<div class="scrim" data-close="1"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="Box ${esc(b.id)}">
-    <div class="dtop"><div><div class="id">${esc(b.id)}</div><div class="meta">${b.size} · ${b.reefer?"reefer":"dry"} · ${esc(status)}</div></div>
+    ${locked?`<div class="redbar">INSPECTION REQUIRED · ${esc(failReason(b,a))}. This alert stays active until an authorized result is recorded.</div>`:""}
+    <div class="dtop"><div><div class="id">${esc(b.id)}</div><div class="meta">${b.size} · ${b.reefer?"reefer":"dry"} · ${esc(status)}</div><div class="meta">Last update ${lastT!==null?clock(lastT):"none"}${stale?' <span class="tag stale">STALE</span>':""}</div></div>
       <button class="close" id="closeBtn" data-close="1">Close</button></div>
     <div class="verdict c-${done?"RELEASE":act}">
       <span class="pill a-${done?"DONE":act}">${done?"Done":act}</span>
-      <div class="dest">${done?"No action needed.":esc(headline(b,act,a,ctx,lane))}</div>
+      <div class="dest">${done?(gone?esc(status):"No action needed."):esc(headline(b,act,a,ctx,lane))}</div>
       ${ovr&&!done?`<div class="ovnote">You set this. The app suggested ${a.action}. <button class="linkbtn" data-ov="AUTO">Use suggestion</button></div>`:""}
     </div>
-    <div class="dsec"><h4>Journey: truck to ship</h4>${journeyHtml(b)}</div>
+    ${weightCard(b,a,ctx)}
+    ${inspMode?processHtml(b,a):done?"":`<div class="dsec"><h4>What to do</h4><ol class="steps">${stepsFor(b,act,a,ctx,lane).map(s=>`<li>${esc(s)}</li>`).join("")}</ol></div>`}
+    ${(b.reefer||b.hold)?`<div class="pair">${reeferPanel(b)}${blePanel(b)}</div>`:""}
     <div class="dsec"><h4>Why</h4><ul class="whylist">${a.findings.map(f=>`<li class="${f.sev}"><div><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div></li>`).join("")}</ul></div>
-    ${b.reefer?`<div class="dsec"><h4>Temperature, next hour</h4>${reeferChart(b)}</div>`:""}
-    ${done?"":`<div class="dsec"><h4>What to do</h4><ol class="steps">${stepsFor(b,act,a,ctx,lane).map(s=>`<li>${esc(s)}</li>`).join("")}</ol></div>
-    <div class="dsec"><h4>Change action</h4><div class="ov">${ACTIONS.map(x=>`<button class="ovb ${x}" data-ov="${x}" aria-pressed="${act===x}" ${x==="RELEASE"&&b.hold?"disabled":""}>${x}</button>`).join("")}</div>
-      ${b.hold?`<div class="ovnote">Release is locked while customs holds the box.</div>`:""}</div>`}
+    ${done?"":`<div class="dsec"><h4>Change action</h4><div class="ov">${ACTIONS.map(x=>`<button class="ovb ${x}" data-ov="${x}" aria-pressed="${act===x}" ${(x==="RELEASE"&&b.hold)||(locked&&x!=="INSPECT")?"disabled":""}>${x}</button>`).join("")}</div>
+      ${locked?`<div class="ovnote">Other actions are locked until an authorized inspector records a pass.</div>`:""}${b.hold?`<div class="ovnote">Release is locked while customs holds the box.</div>`:""}</div>`}
+    <div class="dsec"><h4>Journey: truck to ship</h4>${journeyHtml(b,a)}</div>
     <details class="sub"><summary>Who to trust: every source</summary><div class="tablewrap"><table class="src"><thead><tr><th>Source</th><th>Reading</th><th>Kind</th><th>Trust</th></tr></thead><tbody>${sourcesRows(b,a,ctx)}</tbody></table></div></details>
     <details class="sub"><summary>How the score is worked out</summary>
       <div class="formula">Priority = Spoilage risk + Demurrage urgency + Cutoff urgency + Integrity flag = ${p.spoilage} + ${p.demurrage} + ${p.cutoff} + ${p.integrity} = <span class="tot">${a.score}</span></div></details>
@@ -878,23 +1088,89 @@ function renderDrawer(ctx,A,laneFor){
 function openBox(id){lastFocus=document.activeElement;openId=id;render();const c=$("closeBtn");if(c)c.focus({preventScroll:true})}
 function closeBox(){openId=null;render();if(lastFocus&&document.contains(lastFocus))lastFocus.focus({preventScroll:true})}
 
+document.addEventListener("change",e=>{if(e.target.id==="opSel"){opSel=e.target.value;opNote=""}});
+document.addEventListener("click",e=>{const t=e.target.closest("[data-themetoggle]");if(!t)return;const r=document.documentElement,l=r.dataset.theme==="light";wanted=l?"dark":"light";r.dataset.theme=wanted;t.textContent=l?"Light":"Dark"});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&openId)closeBox()});
 document.addEventListener("click",e=>{
   const sf=e.target.closest("[data-sf]");
   if(sf){sigFilter=+sf.dataset.sf===sigFilter&&+sf.dataset.sf!==0?0:+sf.dataset.sf;render();if(sf.classList.contains("stage"))$("sigpanel").scrollIntoView({behavior:"smooth",block:"start"});return}
   const sp=e.target.closest("[data-speed]");
   if(sp){speed=+sp.dataset.speed;if(speed===1){/* rejoin real time from here */realStart=Date.now()-(S.t*60+acc)*1000}renderClock();return}
-  const el=e.target.closest("[data-open],[data-close],[data-lane],[data-ov],[data-step],[data-reset]");
+  const el=e.target.closest("[data-open],[data-close],[data-lane],[data-ov],[data-res],[data-customs],[data-disp],[data-reset]");
   if(!el)return;
   if(el.dataset.open){openBox(el.dataset.open);return}
   if(el.dataset.close){closeBox();return}
   if(el.dataset.lane){const l=S.lanes.find(x=>x.id===el.dataset.lane);l.up=!l.up;S.log.push({t:S.t,text:`${l.id} ${l.up?"reopened":"closed"} by planner.`});render();return}
+  if(el.dataset.res){const b=S.boxes.find(x=>x.id===openId);if(!b)return;
+    if(!opSel){opNote="Select an authorized inspector first.";render();return}
+    const r=INS(b.id);r.result=el.dataset.res;r.operator=opSel;r.at=S.t;opNote="";
+    if(r.result==="PASS"&&!b.hold){S.overrides[b.id]="RELEASE";r.setOvr=true}else if(r.setOvr){delete S.overrides[b.id];r.setOvr=false}
+    S.log.push({t:S.t,text:`${opSel.split(",")[0]} recorded ${r.result} for ${b.id}.`});
+    if(r.result==="PASS"&&!b.hold&&b.status==="side")clearInspection(S,b,context(S.boxes),S.t,S.log);
+    render();return}
+  if(el.dataset.disp){const b=S.boxes.find(x=>x.id===openId);if(!b)return;
+    if(!opSel){opNote="Select an authorized inspector first.";render();return}
+    const k=el.dataset.disp,r=INS(b.id),op=opSel.split(",")[0];
+    const LB={REINSPECT:"Re-inspection requested",CORRECTED:"Corrected VGM received (simulated: shipper re-declares at the measured weight)",ROLL:"Rolled to next vessel",RETURN:"Returned to shipper",REJECT:"Cargo rejected"};
+    opNote="";
+    if(k==="REINSPECT"){r.result="PENDING";r.disp=null}
+    else{r.disp={type:k,label:LB[k],operator:opSel,at:S.t};
+      if(k==="CORRECTED"&&b.vgm){r.origVgm=r.origVgm||b.vgm;b.vgm=Math.round(b.scale/10)*10;r.result="PENDING"}
+      if(k==="ROLL")b.cutoff+=720;
+      if(k==="RETURN"||k==="REJECT"){b.status=k==="RETURN"?"returned":"rejected";b.exitAt=S.t;addTrace(S,b,2,"rule",LB[k])}}
+    S.log.push({t:S.t,text:`${op}: ${LB[k]} for ${b.id}.`});render();return}
+  if(el.dataset.customs){const b=S.boxes.find(x=>x.id===openId);if(!b)return;
+    b.hold=false;addTrace(S,b,1,"customs","Customs: released for export (simulated feed)");S.log.push({t:S.t,text:`Customs released ${b.id}.`});
+    if(INS(b.id).result==="PASS"&&b.status==="side")clearInspection(S,b,context(S.boxes),S.t,S.log);
+    render();return}
   if(el.dataset.ov){const b=S.boxes.find(x=>x.id===openId);if(!b)return;
+    if(el.dataset.ov!=="INSPECT"&&el.dataset.ov!=="AUTO"&&isOpenInsp(b,analyze(b,context(S.boxes))))return;
     if(el.dataset.ov==="AUTO")delete S.overrides[b.id];
     else{if(el.dataset.ov==="RELEASE"&&b.hold)return;S.overrides[b.id]=el.dataset.ov;S.log.push({t:S.t,text:`Planner set ${b.id} to ${el.dataset.ov.toLowerCase()}.`})}
     render();return}
-  if(el.dataset.step){const n=+el.dataset.step;for(let i=0;i<n;i++)step(S,"triage",S.log);render();return}
   if(el.dataset.reset){initClock();S=makeState();seedTraces(S);acc=0;realStart=Date.now();openId=null;sigFilter=0;render();return}
+});
+
+document.documentElement.setAttribute("data-theme","light");
+let wanted="light";
+new MutationObserver(()=>{const r=document.documentElement;if(r.getAttribute("data-theme")!==wanted)r.setAttribute("data-theme",wanted)}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+function failOwner(b,a){return a.flags.vgm?"Shipper":b.hold?"Customs":a.flags.misdeclared?"Carrier / shipper":"Shipper / surveyor"}
+function failBlock(b,a){
+  const r=INS(b.id),own=failOwner(b,a),late=r.at!==undefined&&S.t-r.at>30;
+  const D=[["REINSPECT","Re-inspect"],...(a.flags.vgm?[["CORRECTED","Corrected VGM received"]]:[]),["ROLL","Roll to next vessel"],["RETURN","Return to shipper"],["REJECT","Reject cargo"]];
+  return `Failed: stays in the Inspect lane. Not released to the yard or load-out.<br>Owner: <b>${own}</b> · charges attributed to ${own}${late?' <span class="tag stale">ESCALATED: no disposition after 30 min</span>':""}${b.cutoff<90?`<br><span class="tag stale">CUTOFF IN ${dur(b.cutoff)}: decide on rollover</span>`:""}${r.disp?`<br>Disposition: <b>${esc(r.disp.label)}</b> · ${esc(r.disp.operator)} · ${clock(r.disp.at)}`:""}<div class="resbar">${D.map(([k,l])=>`<button data-disp="${k}">${l}</button>`).join("")}</div>`;
+}
+function inspChip(b){const r=S.insp&&S.insp[b.id],res=r?r.result:"PENDING",bb=bayOf(b);return `<span class="tag bay">${bb?bb.bay:(b.reefer?"IB-2":"IB-1")}</span><span class="tag res-${res}">${res}</span>`}
+function locLine(b){const l=lastEv(b,["uwb","ble","probe"]);const st=!l||S.t-l.t>STALE_MIN;return l?`Latest location event ${clock(l.t)} via ${DEV[l.dev]}${st?' <span class="tag stale">STALE: re-check RTLS or gateway</span>':" confirms the position"}`:"No location event: confirm by RTLS or gateway"}
+function clearInspection(s,b,ctx,T,log){
+  const o=INS(b.id).operator;
+  addTrace(s,b,2,"rule",`Inspection PASS recorded${o?" by "+o.split(",")[0]:""}`);
+  b.status="gated";b.lane="side";b.gatedAt=T;b.yardT=0;b.slot=slotFor(b);
+  addTrace(s,b,4,"uwb",`Moved from inspection to ${b.slot}. Slot confirmed`);
+  if(log)log.push({t:T,text:`${b.id} cleared inspection and moved to ${b.slot}.`});
+}
+/* Smooth live updates: patch the DOM in place instead of rebuilding it, so nothing blinks, scroll and hover stay put, and animations keep running. */
+function morph(f,t){
+  const fa=[...f.childNodes],ta=[...t.childNodes];
+  ta.forEach((y,i)=>{const x=fa[i];
+    if(!x){f.appendChild(y.cloneNode(true));return}
+    if(x.nodeType!==y.nodeType||x.nodeName!==y.nodeName){f.replaceChild(y.cloneNode(true),x);return}
+    if(x.nodeType!==1){if(x.nodeValue!==y.nodeValue)x.nodeValue=y.nodeValue;return}
+    const keep=x.nodeName==='DETAILS';
+    for(const at of [...x.attributes])if(!y.hasAttribute(at.name)&&!(keep&&at.name==='open'))x.removeAttribute(at.name);
+    for(const at of y.attributes)if(x.getAttribute(at.name)!==at.value)x.setAttribute(at.name,at.value);
+    morph(x,y);
+  });
+  for(let i=fa.length-1;i>=ta.length;i--)f.removeChild(fa[i]);
+}
+function setHTML(el,html){
+  if(el.__h===html)return;el.__h=html;
+  const t=document.createElement(el.tagName);t.innerHTML=html;morph(el,t);
+}
+const _ih=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
+["clock","speed","lanes","now","summary","vs","stages","sigchips","signals","board","log","drawerHost","alert"].forEach(id=>{
+  const el=document.getElementById(id);if(!el)return;
+  Object.defineProperty(el,'innerHTML',{get(){return _ih.get.call(this)},set(v){setHTML(this,v)},configurable:true});
 });
 
 render();
