@@ -82,8 +82,8 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .vs .cmp b.good{color:var(--release)} .vs .cmp b.bad{color:var(--inspect)}
 
 /* board */
-.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start}
-@media (max-width:1000px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}
+@media (max-width:860px){.board{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:560px){.board{grid-template-columns:minmax(0,1fr)}}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}
 .colhead{padding:12px 14px 10px;border-top:4px solid var(--c)}
@@ -91,7 +91,7 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .colhead h3{font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:.05em;text-transform:uppercase;margin:0;color:var(--c)}
 .colhead .n{font-family:var(--f-mono);font-size:18px;font-weight:600}
 .colhead p{margin:2px 0 0;color:var(--muted);font-size:13px}
-.c-RELEASE{--c:var(--release)} .c-SLOW{--c:var(--slow)} .c-REROUTE{--c:var(--reroute)} .c-INSPECT{--c:var(--inspect)}
+.c-WAITING{--c:var(--muted)} .c-RELEASE{--c:var(--release)} .c-SLOW{--c:var(--slow)} .c-REROUTE{--c:var(--reroute)} .c-INSPECT{--c:var(--inspect)}
 .cards{display:flex;flex-direction:column;max-height:440px;overflow:auto;border-top:1px solid var(--line)}
 .card{display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:10px 14px}
 .card:hover{background:var(--panel-2)}
@@ -283,11 +283,6 @@ details.routes{margin-top:4px}details.routes>summary{cursor:pointer;font-size:12
 
 /* ===== ProTrack identity: Tesla-style ===== */
 :root{--f-display:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--f-mono:"Inter",system-ui,sans-serif}
-:root[data-theme="dark"]{
-  color-scheme:dark;--bg:#0A0B0D;--panel:#15171A;--panel-2:#1D2024;--ink:#F4F5F6;--muted:#8D939B;--line:#2A2E34;
-  --accent:#3E6AE1;--accent-ink:#fff;--scrim:rgba(0,0,0,.6);--shadow:none;
-  --release:#3DDC84;--slow:#F5B83D;--reroute:#5B8DEF;--inspect:#FF4D5E;--legal:#A78BFA;--chart-grid:#262A30;
-  --l-hw:#FF9A5C;--l-net:#5B8DEF;--l-proc:#A78BFA;--l-app:#3DDC84}
 :root[data-theme="light"]{color-scheme:light;--bg:#F4F4F4;--panel:#FFFFFF;--panel-2:#F2F3F5;--ink:#171A20;--muted:#5C5E62;--line:#E3E4E6;
   --scrim:rgba(23,26,32,.35);--release:#0F9D58;--slow:#B7791F;--reroute:#3E6AE1;--inspect:#D92D3F;--legal:#7C3AED;--chart-grid:#E8EAEC;
   --l-hw:#D9480F;--l-net:#3E6AE1;--l-proc:#7C3AED;--l-app:#0F9D58}
@@ -388,7 +383,6 @@ button,.card,.ncard,.stage,.lane,.pill,.tag{transition:background-color .25s,col
     </div>
     <div class="controls">
       <div class="speed" id="speed" role="group" aria-label="Clock speed"></div>
-      <button class="btn" id="themeBtn" data-themetoggle="1">Dark</button>
       <button class="btn" id="reset" data-reset="1">Reset</button>
     </div>
   </header>
@@ -644,7 +638,7 @@ function step(s,policy,log){
   s.t=T;
   if(policy==="triage"){
     const p=gatePlan(s,ctx);
-    for(const it of p.side){const b=it.b;
+    for(const it of p.side.sort((x,y)=>y.a.score-x.a.score).slice(0,1)){const b=it.b;
       b.status="side";b.sideT=0;
       const wasOff=b.reefer&&(!b.power||b.fault);
       if(wasOff){b.power=true;b.fault=false}
@@ -915,7 +909,7 @@ function blePanel(b){
     ${routes(["ble"],b.id)}<p class="note">A paired tag does not mean the location is known: pairing and detection are tracked separately. Stale after ${STALE_MIN} min without a detection.</p></div></div>`;
 }
 function renderAlert(A){
-  const o=S.boxes.filter(b=>isOpenInsp(b,A.get(b.id))).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
+  const o=S.boxes.filter(b=>b.status==="side"&&isOpenInsp(b,A.get(b.id))).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
   $("alert").innerHTML=o.length?`<b>${o.length} inspection${o.length>1?"s":""} open</b><span>Stays active until an authorized result is recorded.</span>${o.slice(0,4).map(b=>`<button data-open="${esc(b.id)}">${esc(b.id)}</button>`).join("")}${o.length>4?`<span>+${o.length-4} more in the Inspect column</span>`:""}`:"";
 }
 
@@ -941,8 +935,7 @@ let openId=null;
 let lastFocus=null;
 const $=id=>document.getElementById(id);
 const COLS=[
-  ["RELEASE","Go now","Send through an open lane."],
-  ["SLOW","Later slot","Waits so urgent boxes go first."],
+  ["WAITING","At the gate","Queued for a lane or a tractor move. Tag shows the plan."],
   ["REROUTE","Different path","Fast-track to power, or re-weigh."],
   ["INSPECT","Pull aside","Off the gate lanes, checked properly."]
 ];
@@ -1016,7 +1009,7 @@ function renderSummary(A){
   const loaded=S.boxes.filter(b=>b.status==="loaded").length;
   const risk=S.boxes.filter(b=>b.reefer&&((!b.power||b.fault)&&A.get(b.id).mtb<120||b.temp>=limitOf(b))).length;
   const charges=S.boxes.reduce((s,b)=>s+b.charges,0);
-  const held=S.boxes.filter(b=>!["gated","loaded","returned","rejected"].includes(b.status)&&actionOf(S,b,A.get(b.id))==="INSPECT").length;
+  const held=S.boxes.filter(b=>b.status==="side"&&actionOf(S,b,A.get(b.id))==="INSPECT").length;
   $("summary").innerHTML=[
     ["Waiting at gate",q,""],["In the yard",gated,""],["On the ship",loaded,""],["Held in inspection",held,held?"bad":""],["Reefers at risk",risk,risk?"bad":""],["Charges so far",usd(charges),""]
   ].map(([k,v,c])=>`<div class="stat ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
@@ -1031,14 +1024,14 @@ function renderSummary(A){
 }
 
 function renderBoard(ctx,A){
-  const groups={RELEASE:[],SLOW:[],REROUTE:[],INSPECT:[]};
-  for(const b of S.boxes){if(["gated","loaded","returned","rejected"].includes(b.status))continue;groups[actionOf(S,b,A.get(b.id))].push(b)}
+  const groups={WAITING:[],REROUTE:[],INSPECT:[]};
+  for(const b of S.boxes){if(b.status==="queue")groups.WAITING.push(b);else if(b.status==="side")(groups[actionOf(S,b,A.get(b.id))]||groups.INSPECT).push(b)}
   $("board").innerHTML=COLS.map(([k,name,desc])=>{
     const list=groups[k].sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
     return `<div class="col c-${k}">
       <div class="colhead"><div class="t"><h3>${k}</h3><span class="n">${list.length}</span></div><p>${name}. ${desc}</p></div>
       <div class="cards">${list.length?list.map(b=>{const a=A.get(b.id);
-        return `<button class="card" data-open="${esc(b.id)}"><span class="id"><span class="idt">${esc(b.id)}</span>${b.reefer?'<span class="tag rf">RF</span>':""}${b.hold?'<span class="tag hold">HOLD</span>':""}${b.status==="side"?'<span class="tag off">ASIDE</span>':""}${S.overrides[b.id]?'<span class="tag man">YOU</span>':""}${k==="INSPECT"?inspChip(b):""}</span><span class="sc">${a.score}</span><span class="why">${reason(b,a)}</span></button>`}).join(""):`<div class="emptycol">No boxes here.</div>`}</div>
+        return `<button class="card" data-open="${esc(b.id)}"><span class="id"><span class="idt">${esc(b.id)}</span>${b.reefer?'<span class="tag rf">RF</span>':""}${b.hold?'<span class="tag hold">HOLD</span>':""}${k==="WAITING"?`<span class="tag plan a-${actionOf(S,b,a)}">${actionOf(S,b,a)}</span>`:""}${S.overrides[b.id]?'<span class="tag man">YOU</span>':""}${k==="INSPECT"?inspChip(b):""}</span><span class="sc">${a.score}</span><span class="why">${reason(b,a)}</span></button>`}).join(""):`<div class="emptycol">No boxes here.</div>`}</div>
     </div>`}).join("");
 }
 
@@ -1089,7 +1082,6 @@ function openBox(id){lastFocus=document.activeElement;openId=id;render();const c
 function closeBox(){openId=null;render();if(lastFocus&&document.contains(lastFocus))lastFocus.focus({preventScroll:true})}
 
 document.addEventListener("change",e=>{if(e.target.id==="opSel"){opSel=e.target.value;opNote=""}});
-document.addEventListener("click",e=>{const t=e.target.closest("[data-themetoggle]");if(!t)return;const r=document.documentElement,l=r.dataset.theme==="light";wanted=l?"dark":"light";r.dataset.theme=wanted;t.textContent=l?"Light":"Dark"});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&openId)closeBox()});
 document.addEventListener("click",e=>{
   const sf=e.target.closest("[data-sf]");
@@ -1132,8 +1124,6 @@ document.addEventListener("click",e=>{
 });
 
 document.documentElement.setAttribute("data-theme","light");
-let wanted="light";
-new MutationObserver(()=>{const r=document.documentElement;if(r.getAttribute("data-theme")!==wanted)r.setAttribute("data-theme",wanted)}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 function failOwner(b,a){return a.flags.vgm?"Shipper":b.hold?"Customs":a.flags.misdeclared?"Carrier / shipper":"Shipper / surveyor"}
 function failBlock(b,a){
   const r=INS(b.id),own=failOwner(b,a),late=r.at!==undefined&&S.t-r.at>30;
