@@ -408,7 +408,6 @@ button,.card,.ncard,.stage,.lane,.pill,.tag{transition:background-color .25s,col
   <section>
     <div class="summary" id="summary"></div>
   </section>
-  <div class="vs" id="vs"></div>
 
   <section id="fleetSec" hidden>
     <div class="sechead"><h2 class="sec">Vessels this shift</h2><p>The ships these boxes are booked on. Position, speed and heading are live AIS from the Terminal49 API.</p></div>
@@ -575,6 +574,7 @@ function seededBoxes(){
 
 /* ---------- reefer physics ---------- */
 const LIMIT_BAND=3;
+const REEFER_SWEEP=3; // reefers the probe round reaches per tick
 function reeferRate(b){if(!b.reefer)return 0;if(!b.power)return 0.09;if(b.fault)return 0.05;return b.temp>b.setpoint+0.2?-0.06:0}
 function limitOf(b){return b.setpoint+LIMIT_BAND}
 function minsToBreach(b){if(!b.reefer)return Infinity;const L=limitOf(b);if(b.temp>=L)return 0;const r=reeferRate(b);return r<=0?Infinity:(L-b.temp)/r}
@@ -703,7 +703,6 @@ function seedTraces(s){
        :a.flags.reweigh?`VGM ${kg(b.vgm)} vs scale ${pct(d)} → ${b.scaleId} suspect, re-weigh`
        :`VGM ${kg(b.vgm)} vs scale ${pct(d)} → pass`}
     addTrace(s,b,2,"rule",v);
-    if(b.reefer){s.t=t0;addTrace(s,b,3,"probe",`${deg(b.temp)} · setpoint ${deg(b.setpoint)} · ${!b.power?"NO POWER":b.fault?"unit fault":"powered"}`)}
   }
   s.t=t0;
 }
@@ -716,7 +715,7 @@ function step(s,policy,log){
   if(policy==="triage"){
     const p=gatePlan(s,ctx);
     for(const it of p.side.sort((x,y)=>y.a.score-x.a.score).slice(0,1)){const b=it.b;
-      b.status="side";b.sideT=0;
+      b.status="side";b.sideT=0;if(b.reefer&&b.checkedAt==null)b.checkedAt=T;
       const wasOff=b.reefer&&(!b.power||b.fault);
       if(wasOff){b.power=true;b.fault=false}
       const where=destText(b,it.act,it.a,ctx);
@@ -727,7 +726,7 @@ function step(s,policy,log){
     p.open.forEach(l=>{const it=p.next[l.id];if(!it)return;const b=it.b;
       const wasOff=b.reefer&&(!b.power||b.fault);
       b.status="gated";b.lane=l.id;b.gatedAt=T;b.yardT=0;b.slot=slotFor(b);
-      if(b.reefer){b.power=true;b.fault=false}
+      if(b.reefer){if(b.checkedAt==null)b.checkedAt=T;b.power=true;b.fault=false}
       if(log)log.push({t:T,text:`${l.id} gated ${b.id} (${it.act.toLowerCase()}${it.zone==="fast"?", fast-track":""}) to ${b.slot}.`});
       addTrace(s,b,4,"uwb",`Through lane ${l.id}, stacked at ${b.slot}${b.reefer?" (powered rack)":""}. Slot confirmed`);
       if(wasOff)addTrace(s,b,3,"probe",`Plugged into rack power at ${deg(b.temp)}`);
@@ -754,9 +753,12 @@ function step(s,policy,log){
       }
     }
   }
+  /* reefer watch: the probe round reaches a few more waiting reefers each tick, in gate order */
+  let sweep=REEFER_SWEEP;
+  for(const b of s.boxes){if(sweep<=0)break;if(b.reefer&&b.status!=="loaded"&&b.checkedAt==null){b.checkedAt=T;sweep--}}
   for(const b of s.boxes){
     if(b.reefer&&b.status!=="loaded"){const r=reeferRate(b);b.temp=+(r<0?Math.max(b.setpoint,b.temp+r*TICK):b.temp+r*TICK).toFixed(2);
-      addTrace(s,b,3,"probe",`${deg(b.temp)} · ${!b.power?"NO POWER, rising":b.fault?"unit fault, rising":b.temp>b.setpoint+0.2?"powered, cooling":"holding"}${b.temp>=limitOf(b)?" · OVER LIMIT":""}`)}
+      if(b.checkedAt!=null)addTrace(s,b,3,"probe",`${b.checkedAt===T?"First reading · ":""}${deg(b.temp)} · setpoint ${deg(b.setpoint)} · ${!b.power?"NO POWER, rising":b.fault?"unit fault, rising":b.temp>b.setpoint+0.2?"powered, cooling":"holding"}${b.temp>=limitOf(b)?" · OVER LIMIT":""}`)}
     if((b.status==="queue"||b.status==="side")&&b.free!=null){b.free-=TICK;
       const overdue=Math.min(TICK,Math.max(0,-b.free));
       if(overdue>0&&b.rate!=null)b.charges+=b.rate*overdue/60;}
@@ -875,7 +877,7 @@ function stageCount(n){
   const B=S.boxes;
   if(n===1)return [B.filter(b=>b.status==="queue").length,"waiting at gate"];
   if(n===2)return [B.filter(b=>b.status==="side").length,"pulled aside"];
-  if(n===3)return [B.filter(b=>b.reefer&&b.status!=="loaded").length,"reefers watched"];
+  if(n===3){const R=B.filter(b=>b.reefer);return [R.filter(b=>b.checkedAt!=null).length,`of ${R.length} reefers checked`]}
   if(n===4)return [B.filter(b=>b.status==="gated").length,"in the yard"];
   return [B.filter(b=>b.status==="loaded").length,"on the ship"];
 }
@@ -1083,7 +1085,7 @@ function renderFoot(){
     :`Simulated shift, ${n} example boxes${f?" (container reads need a paid Terminal49 plan)":T49_NOTE?"; Terminal49 roster unavailable: "+T49_NOTE:""}.${ships}${acct} Trust order: customs hold > sensors that agree > carrier and shipper declarations.`;
   const el=$("foot");if(el&&el.textContent!==txt)el.textContent=txt;
 }
-const SPEEDS=[[0,"Pause"],[1,"Live"],[10,"10×"],[60,"60×"]];
+const SPEEDS=[[0,"Pause"],[1,"Live"],[30,"30×"],[60,"60×"]];
 function renderClock(){
   const simSec=START*60+START_SEC+S.t*60+acc;
   const m=((Math.floor(simSec/60)%1440)+1440)%1440, sec=Math.floor(simSec%60);
@@ -1177,20 +1179,13 @@ function renderSummary(A){
   const q=S.boxes.filter(b=>b.status==="queue").length;
   const gated=S.boxes.filter(b=>b.status==="gated").length;
   const loaded=S.boxes.filter(b=>b.status==="loaded").length;
-  const risk=S.boxes.filter(b=>b.reefer&&((!b.power||b.fault)&&A.get(b.id).mtb<120||b.temp>=limitOf(b))).length;
+  /* at risk = probed, and either out of its band (until it cools back in) or unpowered and heading for the limit */
+  const risk=S.boxes.filter(b=>b.reefer&&b.status!=="loaded"&&b.checkedAt!=null&&(b.temp-b.setpoint>BAND||(!b.power||b.fault)&&A.get(b.id).mtb<120||b.temp>=limitOf(b))).length;
   const charges=S.boxes.reduce((s,b)=>s+b.charges,0);
   const held=S.boxes.filter(b=>b.status==="side"&&actionOf(S,b,A.get(b.id))==="INSPECT").length;
   $("summary").innerHTML=[
     ["Waiting at gate",q,""],["In the yard",gated,""],["On the ship",loaded,""],["Held in inspection",held,held?"bad":""],["Reefers at risk",risk,risk?"bad":""],["Charges so far",usd(charges),""]
   ].map(([k,v,c])=>`<div class="stat ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
-  const h=project(S,"hold"),t=project(S,"triage");
-  const cls=(good)=>good?"good":"bad";
-  $("vs").innerHTML=`<span class="t">Next hour: this plan vs holding everything</span>
-    <div class="cmp">
-      <span>Boxes moved <b class="${cls(t.gated>=h.gated)}">${t.gated}</b> vs <b>${h.gated}</b></span>
-      <span>Reefers spoiled <b class="${cls(t.breached<=h.breached)}">${t.breached}</b> vs <b>${h.breached}</b></span>
-      <span>New charges <b class="${cls(t.charges<=h.charges)}">${usd(t.charges)}</b> vs <b>${usd(h.charges)}</b></span>
-    </div>`;
 }
 
 function renderBoard(ctx,A){
@@ -1331,7 +1326,7 @@ function setHTML(el,html){
   const t=document.createElement(el.tagName);t.innerHTML=html;morph(el,t);
 }
 const _ih=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
-["clock","speed","lanes","now","summary","vs","fleet","stages","sigchips","signals","board","log","drawerHost","alert"].forEach(id=>{
+["clock","speed","lanes","now","summary","fleet","stages","sigchips","signals","board","log","drawerHost","alert"].forEach(id=>{
   const el=document.getElementById(id);if(!el)return;
   Object.defineProperty(el,'innerHTML',{get(){return _ih.get.call(this)},set(v){setHTML(this,v)},configurable:true});
 });
