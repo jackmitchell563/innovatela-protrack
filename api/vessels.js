@@ -24,7 +24,7 @@ const FLEET = [
   { imo: "9776171", scac: "OOLU", carrier: "OOCL" },
   { imo: "9811000", scac: "EGLU", carrier: "Evergreen" },
   { imo: "9893890", scac: "EGLU", carrier: "Evergreen" },
-  { imo: "9806079", scac: "ONEU", carrier: "Ocean Network Express" },
+  { imo: "9806079", scac: "ONEU", carrier: "ONE" },
   { imo: "9795610", scac: "COSU", carrier: "COSCO" },
   { imo: "9704611", scac: "YMLU", carrier: "Yang Ming" },
   { imo: "9704623", scac: "YMLU", carrier: "Yang Ming" },

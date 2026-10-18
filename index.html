@@ -65,9 +65,13 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 
 /* do this now */
 .now{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
-.fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.vcard .what{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%}.vcard .hdg{display:inline-block;transition:transform .4s;font-weight:700}
-.vcard .pos{font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.fleet{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px}
+@media (max-width:1100px){.fleet{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (max-width:600px){.fleet{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.ncard.vcard{padding:10px 10px 9px;gap:3px;min-width:0}
+.vcard .row{font-size:11px;color:var(--muted);font-family:var(--f-mono);justify-content:flex-start;gap:5px;white-space:nowrap;overflow:hidden}.vcard .dot{width:8px;height:8px;border-radius:50%;background:var(--release);display:inline-block;flex:none}.vcard .dot.stale{background:var(--slow)}
+.ncard.vcard .what{font-size:12.5px;font-weight:600;letter-spacing:0;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%}
+.ncard.vcard .why{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.vcard .hdg{display:inline-block;transition:transform .4s;font-weight:700}
 .ncard{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
 .ncard:hover{border-color:var(--muted)}
 .ncard .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1048,11 +1052,11 @@ function renderFleet(){
   const loaded={};for(const b of S.boxes)if(b.imo&&b.status==="loaded")loaded[b.imo]=(loaded[b.imo]||0)+1;
   const list=f.list.filter(v=>counts[v.imo]).sort((x,y)=>(counts[y.imo]||0)-(counts[x.imo]||0)||String(x.name).localeCompare(String(y.name)));
   $("fleet").innerHTML=list.map(v=>{const st=vesselStale(v);const n=counts[v.imo]||0,l=loaded[v.imo]||0;
-    return `<div class="ncard vcard"><div class="row"><span class="pill ${st?"a-SLOW":"a-RELEASE"}">${st?"STALE AIS":"LIVE AIS"}</span><span class="rank">${n} box${n===1?"":"es"}${l?` · ${l} loaded`:""}</span></div>
-      <div class="what" title="${esc(v.name||"IMO "+v.imo)}">${esc(v.name||"IMO "+v.imo)}</div>
-      <div class="why">${esc(v.carrier)} (${esc(v.scac)}) · IMO ${esc(v.imo)}</div>
-      <div class="why"><span class="hdg" style="transform:rotate(${v.headingDeg!=null?Math.round(v.headingDeg):0}deg)" aria-hidden="true">↑</span> ${esc(motionText(v))}</div>
-      <div class="pos">${posText(v)} · fix ${esc(vesselAge(v))}</div></div>`}).join("");
+    const tip=`${v.name||"IMO "+v.imo} · ${v.carrier} (${v.scac}) · IMO ${v.imo} · ${motionText(v)} · ${posText(v)} · AIS fix ${vesselAge(v)}${l?` · ${l} loaded`:""}`;
+    return `<div class="ncard vcard" title="${esc(tip)}"><div class="row"><span class="dot ${st?"stale":""}" aria-hidden="true"></span><span>${n} box${n===1?"":"es"}</span></div>
+      <div class="what">${esc(v.name||"IMO "+v.imo)}</div>
+      <div class="why">${esc(v.carrier||v.scac)}</div>
+      <div class="why"><span class="hdg" style="transform:rotate(${v.headingDeg!=null?Math.round(v.headingDeg):0}deg)" aria-hidden="true">↑</span> ${v.speedKn==null?"n/a":v.speedKn<0.5?"stopped":v.speedKn+" kn"} · ${(()=>{const m=vesselAgeMin(v);return m==null?"?":m<60?m+"m":Math.round(m/60)+"h"})()}</div></div>`}).join("");
 }
 function renderAlert(A){
   const o=S.boxes.filter(b=>b.status==="side"&&isOpenInsp(b,A.get(b.id))).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
