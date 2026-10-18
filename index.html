@@ -1053,10 +1053,10 @@ function renderFleet(){
   const list=f.list.filter(v=>counts[v.imo]).sort((x,y)=>(counts[y.imo]||0)-(counts[x.imo]||0)||String(x.name).localeCompare(String(y.name)));
   $("fleet").innerHTML=list.map(v=>{const st=vesselStale(v);const n=counts[v.imo]||0,l=loaded[v.imo]||0;
     const tip=`${v.name||"IMO "+v.imo} · ${v.carrier} (${v.scac}) · IMO ${v.imo} · ${motionText(v)} · ${posText(v)} · AIS fix ${vesselAge(v)}${l?` · ${l} loaded`:""}`;
-    return `<div class="ncard vcard" title="${esc(tip)}"><div class="row"><span class="dot ${st?"stale":""}" aria-hidden="true"></span><span>${n} box${n===1?"":"es"}</span></div>
+    return `<button class="ncard vcard" data-ship="${esc(v.imo)}" title="${esc(tip)}"><div class="row"><span class="dot ${st?"stale":""}" aria-hidden="true"></span><span>${n} box${n===1?"":"es"}</span></div>
       <div class="what">${esc(v.name||"IMO "+v.imo)}</div>
       <div class="why">${esc(v.carrier||v.scac)}</div>
-      <div class="why"><span class="hdg" style="transform:rotate(${v.headingDeg!=null?Math.round(v.headingDeg):0}deg)" aria-hidden="true">↑</span> ${v.speedKn==null?"n/a":v.speedKn<0.5?"stopped":v.speedKn+" kn"} · ${(()=>{const m=vesselAgeMin(v);return m==null?"?":m<60?m+"m":Math.round(m/60)+"h"})()}</div></div>`}).join("");
+      <div class="why"><span class="hdg" style="transform:rotate(${v.headingDeg!=null?Math.round(v.headingDeg):0}deg)" aria-hidden="true">↑</span> ${v.speedKn==null?"n/a":v.speedKn<0.5?"stopped":v.speedKn+" kn"} · ${(()=>{const m=vesselAgeMin(v);return m==null?"?":m<60?m+"m":Math.round(m/60)+"h"})()}</div></button>`}).join("");
 }
 function renderAlert(A){
   const o=S.boxes.filter(b=>b.status==="side"&&isOpenInsp(b,A.get(b.id))).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
@@ -1105,7 +1105,7 @@ setInterval(()=>{
     if(n){render();return}}
   renderClock();
 },1000);
-let openId=null;
+let openId=null, openShip=null;
 let lastFocus=null;
 const $=id=>document.getElementById(id);
 const COLS=[
@@ -1208,8 +1208,28 @@ function renderLog(){
   $("log").innerHTML=S.log.slice(-40).reverse().map(e=>`<li><span class="t">${clock(e.t)}</span><span>${esc(e.text)}</span></li>`).join("");
 }
 
+function shipDrawer(v,A){
+  const st=vesselStale(v);
+  const booked=S.boxes.filter(b=>b.imo===v.imo).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
+  const where=b=>b.status==="loaded"?"on board":b.status==="gated"?"in the yard":b.status==="side"?"pulled aside":"waiting at gate";
+  return `<div class="scrim" data-close="1"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-label="Vessel ${esc(v.name||v.imo)}">
+    <div class="dtop"><div><div class="id">${esc(v.name||"IMO "+v.imo)}</div><div class="meta">${esc(v.carrier)} (${esc(v.scac)}) · IMO ${esc(v.imo)}${v.mmsi?" · MMSI "+esc(v.mmsi):""}</div><div class="meta">AIS fix ${v.positionAt?fmtT(v.positionAt)+" · "+vesselAge(v):"none"}${st?' <span class="tag stale">STALE</span>':""}</div></div>
+      <button class="close" id="closeBtn" data-close="1">Close</button></div>
+    <div class="dsec"><h4>Position <span class="st ${st?"warn":"ok"}">${st?"STALE AIS":"LIVE AIS"}</span></h4><div class="rpanel"><dl class="kv">
+      <dt>Position</dt><dd>${posText(v)}</dd>
+      <dt>Movement</dt><dd><span class="hdg" style="transform:rotate(${v.headingDeg!=null?Math.round(v.headingDeg):0}deg)" aria-hidden="true">↑</span> ${motionText(v)}</dd>
+      <dt>Source</dt><dd>Terminal49 vessel API, fetched ${fmtT(S.fleet.fetchedAt)||"just now"}</dd>
+    </dl><p class="note">Ship identity, position, speed and heading are live from Terminal49. The bookings below are simulated.</p></div></div>
+    <div class="dsec"><h4>Boxes booked on this sailing <span class="st ok">${booked.length}</span></h4>
+      ${booked.length?`<div class="cards">${booked.map(b=>`<button class="card" data-open="${esc(b.id)}"><span class="id"><span class="idt">${esc(b.id)}</span>${b.reefer?'<span class="tag rf">RF</span>':""}${b.hold?'<span class="tag hold">HOLD</span>':""}</span><span class="sc">${A.get(b.id).score}</span><span class="why">${esc(where(b))}</span></button>`).join("")}</div>`:`<div class="emptycol">No boxes booked.</div>`}
+    </div>
+  </aside>`;
+}
 function renderDrawer(ctx,A,laneFor){
   const host=$("drawerHost");
+  if(!openId&&openShip){const v=S.fleet&&S.fleet.byImo[openShip];if(!v){openShip=null;host.innerHTML="";document.body.classList.remove("locked");return}
+    const scrollTop=host.querySelector(".drawer")?.scrollTop||0;host.innerHTML=shipDrawer(v,A);document.body.classList.add("locked");const d=host.querySelector(".drawer");if(d)d.scrollTop=scrollTop;return}
   if(!openId){host.innerHTML="";document.body.classList.remove("locked");return}
   const b=S.boxes.find(x=>x.id===openId);const a=A.get(b.id);const act=actionOf(S,b,a);
   const gone=b.status==="returned"||b.status==="rejected";const lane=laneFor[b.id];const done=b.status==="gated"||b.status==="loaded"||gone;
@@ -1249,20 +1269,22 @@ function renderDrawer(ctx,A,laneFor){
   host.querySelectorAll("details.sub").forEach((x,i)=>{if(openDet[i])x.open=true});
 }
 
-function openBox(id){lastFocus=document.activeElement;openId=id;render();const c=$("closeBtn");if(c)c.focus({preventScroll:true})}
-function closeBox(){openId=null;render();if(lastFocus&&document.contains(lastFocus))lastFocus.focus({preventScroll:true})}
+function openBox(id){lastFocus=document.activeElement;openId=id;openShip=null;render();const c=$("closeBtn");if(c)c.focus({preventScroll:true})}
+function openShipDrawer(imo){lastFocus=document.activeElement;openId=null;openShip=imo;render();const c=$("closeBtn");if(c)c.focus({preventScroll:true})}
+function closeBox(){openId=null;openShip=null;render();if(lastFocus&&document.contains(lastFocus))lastFocus.focus({preventScroll:true})}
 
 document.addEventListener("change",e=>{if(e.target.id==="opSel"){opSel=e.target.value;opNote=""}});
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&openId)closeBox()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&(openId||openShip))closeBox()});
 document.addEventListener("click",e=>{
   if(!S)return;
   const sf=e.target.closest("[data-sf]");
   if(sf){sigFilter=+sf.dataset.sf===sigFilter&&+sf.dataset.sf!==0?0:+sf.dataset.sf;render();if(sf.classList.contains("stage"))$("sigpanel").scrollIntoView({behavior:"smooth",block:"start"});return}
   const sp=e.target.closest("[data-speed]");
   if(sp){speed=+sp.dataset.speed;if(speed===1){/* rejoin real time from here */realStart=Date.now()-(S.t*60+acc)*1000}renderClock();return}
-  const el=e.target.closest("[data-open],[data-close],[data-lane],[data-ov],[data-res],[data-customs],[data-disp],[data-reset]");
+  const el=e.target.closest("[data-open],[data-ship],[data-close],[data-lane],[data-ov],[data-res],[data-customs],[data-disp],[data-reset]");
   if(!el)return;
   if(el.dataset.open){openBox(el.dataset.open);return}
+  if(el.dataset.ship){openShipDrawer(el.dataset.ship);return}
   if(el.dataset.close){closeBox();return}
   if(el.dataset.lane){const l=S.lanes.find(x=>x.id===el.dataset.lane);l.up=!l.up;S.log.push({t:S.t,text:`${l.id} ${l.up?"reopened":"closed"} by planner.`});render();return}
   if(el.dataset.res){const b=S.boxes.find(x=>x.id===openId);if(!b)return;
@@ -1292,7 +1314,7 @@ document.addEventListener("click",e=>{
     if(el.dataset.ov==="AUTO")delete S.overrides[b.id];
     else{if(el.dataset.ov==="RELEASE"&&b.hold)return;S.overrides[b.id]=el.dataset.ov;S.log.push({t:S.t,text:`Planner set ${b.id} to ${el.dataset.ov.toLowerCase()}.`})}
     render();return}
-  if(el.dataset.reset){initClock();S=makeState(REAL,FLEET);seedTraces(S);acc=0;realStart=Date.now();openId=null;sigFilter=0;render();return}
+  if(el.dataset.reset){initClock();S=makeState(REAL,FLEET);seedTraces(S);acc=0;realStart=Date.now();openId=null;openShip=null;sigFilter=0;render();return}
 });
 
 document.documentElement.setAttribute("data-theme","light");
