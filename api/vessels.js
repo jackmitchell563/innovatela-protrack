@@ -37,11 +37,28 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-async function get(key, path) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* One GET; a 429 or 5xx is retried once after Retry-After (capped at 8 s). */
+async function get(key, path, attempt = 0) {
   const r = await fetch(BASE + path, { headers: { Authorization: `Token ${key}`, Accept: "application/vnd.api+json" } });
+  if ((r.status === 429 || r.status >= 500) && attempt < 1) {
+    const wait = Math.min(8, parseInt(r.headers && r.headers.get && r.headers.get("retry-after") || "2", 10) || 2);
+    await sleep(wait * 1000);
+    return get(key, path, attempt + 1);
+  }
   let json = null;
   try { json = await r.json(); } catch (e) { json = null; }
   return { ok: r.ok, status: r.status, json };
+}
+
+/* Run tasks a few at a time so a burst of lookups does not trip the rate limiter. */
+async function pool(tasks, limit) {
+  const out = new Array(tasks.length);
+  let i = 0;
+  async function worker() { while (i < tasks.length) { const k = i++; out[k] = await tasks[k](); } }
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return out;
 }
 
 function num(v) { const n = typeof v === "string" ? parseFloat(v) : v; return typeof n === "number" && isFinite(n) ? n : null; }
@@ -76,12 +93,14 @@ module.exports = async (req, res) => {
   const key = process.env.TERMINAL49_API_KEY;
   if (!key) return send(res, 500, { error: "TERMINAL49_API_KEY is not set on the server" });
   try {
-    const [me, ...rs] = await Promise.all([get(key, "/me"), ...FLEET.map(f => get(key, "/vessels/" + f.imo))]);
+    const me = await get(key, "/me");
     if (me.status === 401) return send(res, 401, { error: "Terminal49 returned HTTP 401", hint: "The API key is missing or wrong." });
-    const vessels = rs.map((r, i) => mapVessel(FLEET[i], r)).filter(v => v && v.lat != null && v.lon != null);
-    if (!vessels.length) return send(res, 502, { error: "No vessel answered", hint: "Terminal49 vessel lookups failed for every IMO." , statuses: rs.map(r => r.status) });
+    const rs = await pool(FLEET.map(f => () => get(key, "/vessels/" + f.imo)), 3);
+    const vessels = [], missing = [];
+    rs.forEach((r, i) => { const v = mapVessel(FLEET[i], r); if (v && v.lat != null && v.lon != null) vessels.push(v); else missing.push({ imo: FLEET[i].imo, status: r.status }); });
+    if (!vessels.length) return send(res, 502, { error: "No vessel answered", hint: "Terminal49 vessel lookups failed for every IMO.", missing });
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=900");
-    return send(res, 200, { source: "terminal49", fetchedAt: new Date().toISOString(), account: mapAccount(me), vessels });
+    return send(res, 200, { source: "terminal49", fetchedAt: new Date().toISOString(), account: mapAccount(me), vessels, missing });
   } catch (e) {
     return send(res, 502, { error: e.message || String(e), hint: "Could not reach Terminal49." });
   }
