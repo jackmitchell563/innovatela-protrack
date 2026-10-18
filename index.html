@@ -425,7 +425,7 @@ button,.card,.ncard,.stage,.lane,.pill,.tag{transition:background-color .25s,col
       <div><b>3 · ProTrack</b><p>Decides which source to trust, scores every box, and sorts it into Release, Slow, Reroute or Inspect.</p></div>
     </div>
   </details>
-  <div class="foot">Simulated shift, 101 example boxes. Trust order: customs hold &gt; sensors that agree &gt; carrier and shipper declarations.</div>
+  <div class="foot" id="foot">Simulated shift, 101 example boxes. Trust order: customs hold &gt; sensors that agree &gt; carrier and shipper declarations.</div>
 </div>
 
 <div id="drawerHost"></div>
@@ -446,12 +446,63 @@ const pct=d=>(d>=0?"+":"")+(d*100).toFixed(1)+"%";
 const usd=n=>"$"+Math.round(n).toLocaleString("en-US");
 const deg=v=>(v>0?"+":"")+v.toFixed(1)+"°C";
 function clock(t){const m=(((START+t)%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")}
-function dur(min){if(!isFinite(min))return "—";min=Math.round(min);if(min<60)return min+" min";const h=Math.floor(min/60),m=min%60;return m?`${h}h ${m}m`:`${h}h`}
+function dur(min){if(min==null||!isFinite(min))return "—";min=Math.round(min);if(min<60)return min+" min";if(min>=2880){const d=Math.floor(min/1440),h=Math.floor(min%1440/60);return h?`${d}d ${h}h`:`${d}d`}const h=Math.floor(min/60),m=min%60;return m?`${h}h ${m}m`:`${h}h`}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
 /* ---------- data ---------- */
-function makeState(){
+let REAL=null, T49_NOTE="";   // /api/boxes payload when the Terminal49 roster loaded, else null
+function minutesUntil(iso){if(!iso)return null;const t=Date.parse(iso);return isFinite(t)?Math.round((t-Date.now())/60000):null}
+/* Terminal49 hold names -> the words the UI uses */
+const HOLD_LABEL={customs:"Customs hold",freight:"Freight hold",line:"Carrier release hold",USDA:"USDA hold",VACIS:"VACIS exam hold",TMF:"Terminal fee hold",other:"Terminal hold"};
+const HOLD_OWNER={customs:"customs",freight:"the shipping line",line:"the shipping line",USDA:"USDA",VACIS:"customs",TMF:"the terminal",other:"the terminal"};
+function holdTitle(b){return HOLD_LABEL[b.holdBy]||"Customs hold"}
+function holdOwner(b){return HOLD_OWNER[b.holdBy]||"customs"}
+/* One Terminal49 container record -> one box. Identity, booking, holds, free time and fees are real;
+   the gate-sensor layer (scale, OCR, probe) is simulated, seeded by the container number so it is stable between loads. */
+function realBox(rec){
+  const num=String(rec.number||"").toUpperCase().replace(/\s+/g,"");
+  const m=/^([A-Z]{4})(\d{6})(\d)$/.exec(num);
+  const id=m?`${m[1]} ${m[2]}-${m[3]}`:(num||rec.t49Id);
+  const r=rng(hashId(num||rec.t49Id)), pick=a=>a[Math.floor(r()*a.length)], between=(a,b)=>a+r()*(b-a);
+  const reefer=rec.equipmentType==="reefer";
+  const len=[20,40,45].includes(rec.equipmentLength)?rec.equipmentLength:40;
+  const hc=rec.equipmentHeight==="high_cube"||len===45;
+  const size=reefer?`${len}RH`:`${len}${hc?"HC":"GP"}`;
+  const tare=reefer?(len===20?3050:4600):len===20?2250:len===45?4800:hc?3900:3750;
+  const vgm=rec.weightLbs?Math.round(rec.weightLbs/2.20462/10)*10:null;
+  const sh=rec.shipment||{};
+  const active=(rec.holds||[]).filter(h=>h.status==="hold");
+  const etd=minutesUntil(sh.polEtd);
+  const b={id,size,reefer,tare,declared:vgm?"Full":"Not declared",vgm,
+    hold:active.length>0,holdBy:active.length?active[0].name:null,
+    holdReason:active.map(h=>h.description||h.name).join("; "),
+    cutoff:etd!=null&&etd>0?etd:null, free:minutesUntil(rec.pickupLfd),
+    rate:null, charges:rec.feesTotal||0, status:"queue", t49:rec};
+  const u=r(); b.scaleId=u<0.17?"WB-3":(u<0.6?"WB-1":"WB-2");
+  const drift=b.scaleId==="WB-3"?1.065:1;
+  const real=vgm||tare+between(len===20?6000:8000,len===20?20000:24500);
+  b.real=Math.round(real);
+  b.scale=Math.round(real*drift*(1+between(-0.012,0.012))/10)*10;
+  b.loadCell=r()<0.25?Math.round(real*(1+between(-0.008,0.008))/10)*10:null;
+  b.ocr=r()<0.05?between(0.55,0.78):between(0.9,0.995);
+  if(reefer){
+    b.setpoint=pick([-25,-18,-18,2,4,13]);
+    b.power=r()>0.15; b.fault=b.power&&r()<0.1;
+    b.temp=+(b.power&&!b.fault?b.setpoint+between(-0.3,0.6):b.setpoint+between(0.4,2.7)).toFixed(1);
+  }
+  return b;
+}
+function makeState(realData){
+  const live=!!(realData&&Array.isArray(realData.boxes)&&realData.boxes.length);
+  let boxes;
+  if(live){const seen=new Set();boxes=[];for(const rec of realData.boxes){const b=realBox(rec);if(seen.has(b.id))continue;seen.add(b.id);boxes.push(b)}}
+  else boxes=seededBoxes();
+  return {t:0,boxes,overrides:{},signals:[],live,fetchedAt:live?realData.fetchedAt:null,
+    lanes:[{id:"G1",up:true},{id:"G2",up:false,why:"OCR camera fault"},{id:"G3",up:true},{id:"G4",up:false,why:"Barrier jammed"},{id:"G5",up:false,why:"Power outage"},{id:"G6",up:true}],
+    log:[{t:0,text:`Shift start. Lanes G2, G4, G5 down. ${boxes.length} boxes waiting at the gate${live?" (roster from Terminal49)":""}.`}]};
+}
+function seededBoxes(){
   const r=rng(20261017);
   const pick=a=>a[Math.floor(r()*a.length)];
   const between=(a,b)=>a+r()*(b-a);
@@ -494,9 +545,7 @@ function makeState(){
     }
     boxes.push(b);
   }
-  return {t:0,boxes,overrides:{},signals:[],
-    lanes:[{id:"G1",up:true},{id:"G2",up:false,why:"OCR camera fault"},{id:"G3",up:true},{id:"G4",up:false,why:"Barrier jammed"},{id:"G5",up:false,why:"Power outage"},{id:"G6",up:true}],
-    log:[{t:0,text:"Shift start. Lanes G2, G4, G5 down. 101 boxes waiting at the gate."}]};
+  return boxes;
 }
 
 /* ---------- reefer physics ---------- */
@@ -521,8 +570,8 @@ function analyze(b,ctx){
   const f=[]; const flags={};
   const cargo=b.scale-b.tare;
   const sh=ctx.scales[b.scaleId];
-  if(b.hold){flags.hold=true;f.push({sev:"legal",src:"Customs",title:"Customs hold",
-    text:`${b.holdReason}. A legal hold outranks every sensor and every declaration. The box cannot be released until customs clears it.`})}
+  if(b.hold){flags.hold=true;f.push({sev:"legal",src:b.t49?"Terminal49":"Customs",title:holdTitle(b),
+    text:`${b.holdReason}. A legal hold outranks every sensor and every declaration. The box cannot be released until ${holdOwner(b)} clears it.`})}
   if(b.declared==="Empty"&&cargo>1000){flags.misdeclared=true;f.push({sev:"crit",src:"Weighbridge vs carrier",title:"Declared empty, measured loaded",
     text:`Carrier EDI says empty. ${b.scaleId} reads ${kg(b.scale)} against a ${kg(b.tare)} tare, so roughly ${kg(cargo)} of cargo. Measured beats declared: trust the scale.`})}
   if(b.vgm){
@@ -548,16 +597,18 @@ function analyze(b,ctx){
       text:`${deg(b.temp)} and rising ${(reeferRate(b)*60).toFixed(1)}°C/h ${cause}. Crosses the ${deg(L)} limit in about ${dur(m)}.`})}
     else if(b.power&&!b.fault){f.push({sev:"ok",src:"Reefer sensor",title:"Holding temperature",text:`${deg(b.temp)} at a ${deg(b.setpoint)} setpoint, unit powered.`})}
   }
-  if(b.free<=0)f.push({sev:"warn",src:"Billing clock",title:"Charges running",text:`Free time ended ${dur(-b.free)} ago. Accruing ${usd(b.rate)}/h while it waits.`});
-  else if(b.free<90)f.push({sev:"info",src:"Billing clock",title:"Free time ending",text:`${dur(b.free)} of free time left, then ${usd(b.rate)}/h.`});
-  if(b.cutoff<90)f.push({sev:"info",src:"Vessel schedule",title:"Cutoff close",text:`Vessel cutoff in ${dur(b.cutoff)}.`});
+  if(b.free!=null){
+    if(b.free<=0)f.push({sev:"warn",src:"Billing clock",title:b.rate!=null?"Charges running":"Past last free day",text:`Free time ended ${dur(-b.free)} ago. ${b.rate!=null?`Accruing ${usd(b.rate)}/h while it waits.`:b.charges?`Terminal fees so far ${usd(b.charges)}.`:"Demurrage accrues from here."}`});
+    else if(b.free<90)f.push({sev:"info",src:"Billing clock",title:"Free time ending",text:`${dur(b.free)} of free time left${b.rate!=null?`, then ${usd(b.rate)}/h`:""}.`});
+  }
+  if(b.cutoff!=null&&b.cutoff<90)f.push({sev:"info",src:"Vessel schedule",title:"Cutoff close",text:`Vessel cutoff in ${dur(b.cutoff)}.`});
   if(!f.some(x=>x.sev!=="info"&&x.sev!=="ok"))f.unshift({sev:"ok",src:"All sources",title:"Sources agree",text:"Declaration, scale, OCR and customs line up. Nothing to resolve."});
 
   const m=minsToBreach(b);
   const parts={
     spoilage:b.reefer?Math.round(40*(m===0?1:clamp((120-m)/120))):0,
-    demurrage:Math.round(25*clamp((240-b.free)/480)),
-    cutoff:Math.round(25*clamp((360-b.cutoff)/330)),
+    demurrage:b.free==null?0:Math.round(25*clamp((240-b.free)/480)),
+    cutoff:b.cutoff==null?0:Math.round(25*clamp((360-b.cutoff)/330)),
     integrity:(flags.hold||flags.misdeclared||flags.vgm)?10:0
   };
   const score=parts.spoilage+parts.demurrage+parts.cutoff+parts.integrity;
@@ -599,7 +650,7 @@ function gatePlan(s,ctx){
 /* ---------- simulation step ---------- */
 /* ---------- signal tracing ---------- */
 function hashId(id){let h=0;for(const c of id)h=(h*31+c.charCodeAt(0))>>>0;return h}
-const ISO={"40RH":"45R1","40HC":"45G1","20GP":"22G1"};
+const ISO={"40RH":"45R1","40HC":"45G1","20GP":"22G1","40GP":"42G1","20RH":"22R1","45HC":"L5G1","45RH":"L5R1"};
 function slotFor(b){const h=hashId(b.id);const pad=n=>String(n).padStart(2,"0");
   return b.reefer?`R${1+h%3}-${pad(1+(h>>>3)%20)}-0${1+(h>>>7)%4}`:`${"ABCDEF"[h%6]}${1+(h>>>3)%4}-${pad(1+(h>>>5)%30)}-0${1+(h>>>9)%5}`}
 function gatewayFor(b){return "GW-0"+(1+hashId(b.id)%6)}
@@ -613,9 +664,10 @@ function seedTraces(s){
   const ctx=context(s.boxes);const t0=s.t;
   for(const b of s.boxes){
     const a=analyze(b,ctx);
-    s.t=t0-12;addTrace(s,b,1,"ocr",`Read ${b.id} · ISO ${ISO[b.size]} · confidence ${b.ocr.toFixed(2)}`);
+    s.t=t0-12;addTrace(s,b,1,"ocr",`Read ${b.id} · ISO ${ISO[b.size]||b.size} · confidence ${b.ocr.toFixed(2)}`);
     s.t=t0-11;addTrace(s,b,1,"scale",`${b.scaleId} weighed ${kg(b.scale)} gross`);
-    addTrace(s,b,1,"customs",b.hold?`Customs HOLD: ${b.holdReason}`:"Customs: released for export");
+    if(b.t49){const sh=b.t49.shipment||{};addTrace(s,b,1,"t49",`Booking ${sh.bol||"n/a"} · ${sh.carrier||sh.scac||"carrier n/a"}${sh.vessel?" · "+sh.vessel:""}${b.t49.currentStatus?" · "+b.t49.currentStatus.replace(/_/g," "):""}`)}
+    addTrace(s,b,1,b.t49?"t49":"customs",b.hold?`${holdTitle(b).toUpperCase()}: ${b.holdReason}`:b.t49?"Terminal49: no active holds":"Customs: released for export");
     if(b.reefer||b.hold)addTrace(s,b,1,"ble",`BLE tag BT-${String(hashId(b.id)%9000+1000)} paired to ${b.id}`);
     s.t=t0-10;
     let v;
@@ -680,9 +732,9 @@ function step(s,policy,log){
   for(const b of s.boxes){
     if(b.reefer&&b.status!=="loaded"){const r=reeferRate(b);b.temp=+(r<0?Math.max(b.setpoint,b.temp+r*TICK):b.temp+r*TICK).toFixed(2);
       addTrace(s,b,3,"probe",`${deg(b.temp)} · ${!b.power?"NO POWER, rising":b.fault?"unit fault, rising":b.temp>b.setpoint+0.2?"powered, cooling":"holding"}${b.temp>=limitOf(b)?" · OVER LIMIT":""}`)}
-    if(b.status==="queue"||b.status==="side"){b.free-=TICK;
+    if((b.status==="queue"||b.status==="side")&&b.free!=null){b.free-=TICK;
       const overdue=Math.min(TICK,Math.max(0,-b.free));
-      if(overdue>0)b.charges+=b.rate*overdue/60;}
+      if(overdue>0&&b.rate!=null)b.charges+=b.rate*overdue/60;}
   }
 }
 
@@ -704,15 +756,16 @@ function project(s,policy){
 function sourcesRows(b,a,ctx){
   const sh=ctx.scales[b.scaleId];
   const rows=[];
-  rows.push(["Carrier EDI",b.declared==="Empty"?"Empty":`Full · VGM ${kg(b.vgm)}`,"Declared",
-    (a.flags.misdeclared||a.flags.vgm)?["lo","Overruled"]:["lo","Low: a claim"],"Booking feed via TOS"]);
-  rows.push(["Gate OCR",`${b.id} · conf ${b.ocr.toFixed(2)}`,"Measured",b.ocr<0.8?["sus","Check by hand"]:["hi","High"],"Gate camera"]);
+  const sim=b.t49?" (simulated)":"";
+  rows.push([b.t49?"Carrier booking":"Carrier EDI",b.declared==="Empty"?"Empty":b.vgm?`Full · VGM ${kg(b.vgm)}`:"No weight declared","Declared",
+    (a.flags.misdeclared||a.flags.vgm)?["lo","Overruled"]:["lo","Low: a claim"],b.t49?`Terminal49 · ${(b.t49.shipment&&b.t49.shipment.carrier)||"carrier"}`:"Booking feed via TOS"]);
+  rows.push(["Gate OCR",`${b.id} · conf ${b.ocr.toFixed(2)}`,"Measured",b.ocr<0.8?["sus","Check by hand"]:["hi","High"],"Gate camera"+sim]);
   rows.push([`Weighbridge ${b.scaleId}`,`${kg(b.scale)} gross`,"Measured",
-    sh.suspect?["sus",`Suspect: median ${pct(sh.median-1)}`]:["hi","High"],"Pre-gate scale"]);
-  rows.push(["Crane load cell",b.loadCell?kg(b.loadCell):"Not lifted yet","Measured",b.loadCell?["hi","High"]:["na","At load-out"],"Spreader load cell"]);
-  rows.push(["Customs",b.hold?`Hold · ${b.holdReason}`:"Clear","Legal",b.hold?["ov","Overrides all"]:["hi","Clear"],"Customs release feed"]);
-  if(b.reefer)rows.push(["Reefer probe",`${deg(b.temp)} · set ${deg(b.setpoint)} · ${!b.power?"no power":b.fault?"unit fault":"powered"}`,"Measured",["hi","High"],"BLE temp sensor + RTLS"]);
-  rows.push(["Billing clock",b.free<=0?`${dur(-b.free)} past free time · ${usd(b.rate)}/h`:`${dur(b.free)} free · then ${usd(b.rate)}/h`,"Contract",["na","—"],"Tariff"]);
+    sh.suspect?["sus",`Suspect: median ${pct(sh.median-1)}`]:["hi","High"],"Pre-gate scale"+sim]);
+  rows.push(["Crane load cell",b.loadCell?kg(b.loadCell):"Not lifted yet","Measured",b.loadCell?["hi","High"]:["na","At load-out"],"Spreader load cell"+sim]);
+  rows.push([b.holdBy&&b.holdBy!=="customs"?"Terminal holds":"Customs",b.hold?`Hold · ${b.holdReason}`:b.t49?"No active holds":"Clear","Legal",b.hold?["ov","Overrides all"]:["hi","Clear"],b.t49?"Terminal49 · terminal hold feed":"Customs release feed"]);
+  if(b.reefer)rows.push(["Reefer probe",`${deg(b.temp)} · set ${deg(b.setpoint)} · ${!b.power?"no power":b.fault?"unit fault":"powered"}`,"Measured",["hi","High"],"BLE temp sensor + RTLS"+sim]);
+  rows.push(["Billing clock",b.free==null?"Last free day not reported":`${b.free<=0?dur(-b.free)+" past free time":dur(b.free)+" free"}${b.rate!=null?` · ${usd(b.rate)}/h`:b.charges?` · fees ${usd(b.charges)}`:""}`,"Contract",["na","—"],b.t49?"Terminal49 · last free day and fees":"Tariff"]);
   return rows.map(r=>`<tr><td><b>${esc(r[0])}</b><div class="sensor">${esc(r[4])}</div></td><td class="r">${esc(r[1])}</td><td><span class="kind">${r[2]}</span></td><td><span class="trust ${r[3][0]}">${esc(r[3][1])}</span></td></tr>`).join("");
 }
 
@@ -720,7 +773,7 @@ function stepsFor(b,act,a,ctx,lane){
   const s=[];
   if(act==="INSPECT"){
     if(b.reefer)s.push(`Plug into the powered inspection bay first`+(isFinite(a.mtb)&&(!b.power||b.fault)?` (${a.mtb===0?"already past limit":dur(a.mtb)+" to breach"}).`:"."));
-    if(b.hold)s.push(`Keep the customs hold (${b.holdReason}). Do not release.`);
+    if(b.hold)s.push(`Keep the ${holdTitle(b).toLowerCase()} (${b.holdReason}). Do not release.`);
     if(a.flags.misdeclared)s.push(`Treat the carrier's "empty" as wrong. Open or scan the box, and confirm weight on the crane load cell before load-out.`);
     if(a.flags.vgm)s.push(`Tell the shipper the VGM failed. They re-declare or re-stow; the box does not board on the old figure.`);
     s.push("Keep it off the gate lanes so the other boxes keep moving.");
@@ -729,7 +782,7 @@ function stepsFor(b,act,a,ctx,lane){
     else{s.push(`Pull from the gate queue to the re-weigh pad at ${ctx.goodScale}.`);s.push(`If ${ctx.goodScale} matches VGM, release it. If it matches ${b.scaleId}, treat it as a VGM mismatch.`);s.push(`Flag ${b.scaleId} for calibration.`)}
   }else if(act==="SLOW"){
     if(a.flags.ocr){s.push("A clerk confirms the container number against the booking.");s.push("Then it joins the buffer for the next free lane.")}
-    else{s.push(`Give it a later gate slot. Cutoff is ${dur(b.cutoff)} away and charges ${b.free>0?"have not started":"are low"}.`);s.push("Re-score every 5 minutes and promote it if the clock tightens.")}
+    else{s.push(`Give it a later gate slot. ${b.cutoff!=null?`Cutoff is ${dur(b.cutoff)} away`:"No vessel cutoff is set"} and charges ${b.free==null?"are not tracked":b.free>0?"have not started":"are low"}.`);s.push("Re-score every 5 minutes and promote it if the clock tightens.")}
   }else{
     s.push(`Gate in through ${lane||"the next open lane"}.`);s.push("Stack in the RTLS-assigned yard block.");
   }
@@ -773,7 +826,7 @@ const STAGES=[
   {n:4,name:"Yard",hw:["uwb"],was:"Driver radios the slot"},
   {n:5,name:"Load-out",hw:["cocr","cell"],was:"Tally clerk reads number"}
 ];
-const DEV={ocr:"Gate OCR camera",scale:"Weighbridge",ble:"BLE tag",customs:"Customs feed",rule:"VGM rule engine",probe:"IoT temp probe",uwb:"UWB RTLS",cocr:"Quay crane OCR",cell:"Spreader load cell"};
+const DEV={ocr:"Gate OCR camera",scale:"Weighbridge",ble:"BLE tag",customs:"Customs feed",t49:"Terminal49 API",rule:"VGM rule engine",probe:"IoT temp probe",uwb:"UWB RTLS",cocr:"Quay crane OCR",cell:"Spreader load cell"};
 const PATH={
   ocr:[["Gate OCR camera","hw"],["Fiber","net"],["Edge OCR server","proc"],["IoT platform","proc"],["ProTrack","app"]],
   scale:[["Weighbridge load cells","hw"],["RS-485 to Ethernet","net"],["Scale terminal","proc"],["IoT platform","proc"],["ProTrack","app"]],
@@ -783,7 +836,8 @@ const PATH={
   cocr:[["Crane OCR camera","hw"],["Crane PLC","net"],["Fiber","net"],["IoT platform","proc"],["ProTrack","app"]],
   cell:[["Spreader load cell","hw"],["Crane PLC","net"],["Fiber","net"],["Weight re-check","proc"],["ProTrack","app"]],
   rule:[["Scale reading + booking VGM","proc"],["VGM rule","proc"],["ProTrack","app"]],
-  customs:[["Customs system","ext"],["API","net"],["TOS","proc"],["ProTrack","app"]]
+  customs:[["Customs system","ext"],["API","net"],["TOS","proc"],["ProTrack","app"]],
+  t49:[["Carrier + terminal feeds","ext"],["Terminal49 API","net"],["ProTrack backend","proc"],["ProTrack","app"]]
 };
 let sigFilter=0;
 function pathHtml(dev,id){
@@ -828,14 +882,14 @@ const INS=id=>((S.insp=S.insp||{})[id]=S.insp[id]||{result:"PENDING"});
 const evsOf=(b,d)=>(b.trace||[]).filter(e=>d.includes(e.dev));
 const lastEv=(b,d)=>{const l=evsOf(b,d);return l[l.length-1]};
 function bayOf(b){const e=(b.trace||[]).find(x=>/inspection bay/i.test(x.text));const m=e&&e.text.match(/IB-\d/);return m?{bay:m[0],t:e.t}:null}
-function failReason(b,a){return a.flags.vgm?"Weight check failed: VGM mismatch":b.hold?"Customs hold: "+b.holdReason:a.flags.misdeclared?"Declared empty, measured loaded":"Inspection required"}
+function failReason(b,a){return a.flags.vgm?"Weight check failed: VGM mismatch":b.hold?holdTitle(b)+": "+b.holdReason:a.flags.misdeclared?"Declared empty, measured loaded":"Inspection required"}
 const isOpenInsp=(b,a)=>!["gated","loaded","returned","rejected"].includes(b.status)&&a.action==="INSPECT"&&INS(b.id).result!=="PASS";
 function stageStates(b,a){
   const st=b.status,done=st==="gated"||st==="loaded",blocked=!done&&(b.hold||isOpenInsp(b,a));
   const rel=b.vgm?(b.scale-b.vgm)/b.vgm:0;
   return [
     ["Completed",a.flags.ocr?`Identity uncertain (OCR ${b.ocr.toFixed(2)}), clerk to confirm`:"Identity captured"],
-    done?["Completed","Weight verified"]:blocked?["Blocked / inspection",a.flags.vgm?`Weight discrepancy ${pct(rel)}`:b.hold?"Customs hold":a.flags.misdeclared?"Declared empty, measured loaded":"Inspection required"]:a.flags.reweigh?["In progress","Re-weigh needed"]:["In progress","Within tolerance, awaiting gate"],
+    done?["Completed","Weight verified"]:blocked?["Blocked / inspection",a.flags.vgm?`Weight discrepancy ${pct(rel)}`:b.hold?holdTitle(b):a.flags.misdeclared?"Declared empty, measured loaded":"Inspection required"]:a.flags.reweigh?["In progress","Re-weigh needed"]:["In progress","Within tolerance, awaiting gate"],
     !b.reefer?["N/A","Dry box, no monitoring"]:st==="loaded"?["Completed","Monitoring ended at load-out"]:["Active",b.power&&!b.fault?"Powered; temperature monitored":"No power or unit fault; temperature monitored, rising"],
     st==="loaded"?["Completed","Left the yard"]:st==="gated"?["In progress","In the yard"]:["Pending",blocked?"Awaiting inspection clearance":"Awaiting gate-through"],
     st==="loaded"?["Completed","Loaded on the ship"]:["Pending",blocked?"Awaiting inspection clearance and downstream authorization":"Awaiting downstream authorization"]
@@ -866,7 +920,7 @@ function weightCard(b,a,ctx){
     <p class="note"><b>Comparable?</b> Only container-only weight (box + cargo) may be compared with VGM. A weighbridge gross includes the tractor and chassis. This simulation treats the scale value as tare-subtracted at the gate; a live feed must supply that tare-weigh or the check is not valid.</p>
     <div class="tablewrap"><table class="src"><thead><tr><th>Value</th><th>Reading</th><th>Source</th><th>Time</th><th>Validation</th></tr></thead><tbody>
     ${row("Scale",kg(b.scale),esc(b.scaleId)+" weighbridge",se?clock(se.t):"n/a",sh.suspect?`<span class="trust sus">Suspect: reads ${pct(sh.median-1)} high this shift</span>`:`<span class="trust hi">Calibrated, in line with shift</span>`)}
-    ${row("VGM",kg(b.vgm),"Shipper, via carrier EDI","With booking, before arrival",`<span class="trust lo">Declared, not independently verified</span>`)}
+    ${row("VGM",kg(b.vgm),b.t49?"Shipper, via Terminal49 (carrier feed)":"Shipper, via carrier EDI","With booking, before arrival",`<span class="trust lo">Declared, not independently verified</span>`)}
     ${row("Load cell",b.loadCell?kg(b.loadCell):"Not lifted yet","Spreader load cell",lc?clock(lc.t):"At load-out",b.loadCell?`<span class="trust hi">Independent second sensor</span>`:`<span class="trust na">Pending</span>`)}
     </tbody></table></div></div></div>`;
 }
@@ -879,7 +933,7 @@ function processHtml(b,a){
   const form=`<div class="resbar"><select id="opSel" aria-label="Authorized inspector"><option value="">Select authorized inspector…</option>${OPS.map(o=>`<option ${o===opSel?"selected":""}>${esc(o)}</option>`).join("")}</select>
     ${["PASS","FAIL","PENDING"].map(x=>`<button class="${x}" data-res="${x}">${x[0]+x.slice(1).toLowerCase()}</button>`).join("")}</div>${opNote?`<div class="ovnote" style="color:var(--inspect)">${opNote}</div>`:""}<div class="ovnote">Roster is simulated; connect it to your access control.</div>`;
   L.push([res==="PENDING"?"now":res==="FAIL"?"fail":"done","Record the inspection result",`Result: <b>${res}</b>${r.operator?` · ${esc(r.operator)} · ${clock(r.at)}`:" · no operator yet"}${form}`]);
-  L.push([res==="PASS"&&!b.hold?"done":res==="PASS"||res==="FAIL"?"now":"wait","Release or continue the hold",res==="PASS"?(b.hold?`Inspection passed. Customs still holds the box (${esc(b.holdReason)}); only customs can lift it.<div class="resbar"><button data-customs="1">Simulate customs release</button></div>`:"Cleared. Moving to the yard."):(res==="FAIL"?failBlock(b,a):"Hold continues. Yard and load-out stay blocked until an authorized PASS is recorded.")]);
+  L.push([res==="PASS"&&!b.hold?"done":res==="PASS"||res==="FAIL"?"now":"wait","Release or continue the hold",res==="PASS"?(b.hold?`Inspection passed. ${holdTitle(b)} continues (${esc(b.holdReason)}); only ${holdOwner(b)} can lift it.<div class="resbar"><button data-customs="1">Simulate hold release</button></div>`:"Cleared. Moving to the yard."):(res==="FAIL"?failBlock(b,a):"Hold continues. Yard and load-out stay blocked until an authorized PASS is recorded.")]);
   return `<div class="dsec"><h4>Inspection process</h4><ol class="procs">${L.map((s,i)=>`<li class="${s[0]}"><span class="n">${i+1}</span><div><b>${s[1]}</b><span class="d">${s[2]}</span></div></li>`).join("")}</ol></div>`;
 }
 function reeferPanel(b){
@@ -908,14 +962,62 @@ function blePanel(b){
     <dt>Signal quality</dt><dd>Not reported by this tag type</dd></dl>
     ${routes(["ble"],b.id)}<p class="note">A paired tag does not mean the location is known: pairing and detection are tracked separately. Stale after ${STALE_MIN} min without a detection.</p></div></div>`;
 }
+function fmtT(iso,tz){if(!iso)return null;const d=new Date(iso);if(isNaN(d))return null;const o={month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"};try{return d.toLocaleString("en-US",tz?{...o,timeZone:tz}:o)}catch(e){return d.toLocaleString("en-US",o)}}
+function fmtD(iso,tz){if(!iso)return null;const d=new Date(iso);if(isNaN(d))return null;const o={month:"short",day:"numeric",year:"numeric"};try{return d.toLocaleDateString("en-US",tz?{...o,timeZone:tz}:o)}catch(e){return d.toLocaleDateString("en-US",o)}}
+/* Everything Terminal49 knows about the box, shown verbatim. Only rendered for a live roster. */
+function t49Panel(b){
+  const r=b.t49;if(!r)return"";const s=r.shipment||{};const tz=r.podTimezone;
+  const row=(k,v)=>v?`<dt>${k}</dt><dd>${v}</dd>`:"";
+  const holds=r.holds.length?r.holds.map(h=>`<span class="st ${h.status==="hold"?"crit":"warn"}">${esc(h.name)}</span> ${esc(h.description||"")}${h.status==="pending"?" (pending)":""}`).join("<br>"):'<span class="st ok">NONE</span>';
+  const fees=r.fees.length?r.fees.map(f=>`${esc(f.type)} ${f.amount!=null?usd(f.amount):"—"}`).join(" · "):"None reported";
+  const avail=!r.availabilityKnown?"Not reported by terminal":r.availableForPickup?'<span class="st ok">AVAILABLE</span>':'<span class="st warn">NOT AVAILABLE</span>';
+  const equip=[r.equipmentType,r.equipmentLength&&r.equipmentLength+" ft",r.equipmentHeight&&String(r.equipmentHeight).replace(/_/g," ")].filter(Boolean).map(esc).join(" · ");
+  const checked=[r.terminalCheckedAt&&"terminal "+fmtT(r.terminalCheckedAt),s.lineCheckedAt&&"carrier "+fmtT(s.lineCheckedAt)].filter(Boolean).join(" · ");
+  return `<div class="dsec"><h4>Terminal49 record <span class="st ok">LIVE</span></h4><div class="rpanel"><dl class="kv">
+    ${row("Container",esc(r.number||"")+(r.sealNumber?" · seal "+esc(r.sealNumber):""))}
+    ${row("Carrier",s.carrier?esc(s.carrier)+(s.scac?" ("+esc(s.scac)+")":""):s.scac?esc(s.scac):null)}
+    ${row("Bill of lading",s.bol?esc(s.bol):null)}
+    ${row("Equipment",equip||null)}
+    ${row("Declared weight",r.weightLbs!=null?kg(r.weightLbs/2.20462)+" ("+Math.round(r.weightLbs).toLocaleString("en-US")+" lb)":"Not reported by carrier")}
+    ${row("Route",(s.pol||s.polCode)?esc(s.pol||s.polCode)+" → "+esc(s.pod||s.podCode||"?")+(r.terminal&&r.terminal.name?" · "+esc(r.terminal.name):""):null)}
+    ${row("Vessel",s.vessel?esc(s.vessel)+(s.voyage?" · voyage "+esc(s.voyage):"")+(s.imo?" · IMO "+esc(s.imo):""):null)}
+    ${row("Departure",s.polAtd?fmtT(s.polAtd)+" (actual)":s.polEtd?fmtT(s.polEtd)+" (estimated)":null)}
+    ${row("Arrival at discharge port",s.podAta?fmtT(s.podAta,tz)+" (actual)":s.podEta?fmtT(s.podEta,tz)+" (estimated)":null)}
+    ${row("Status",r.currentStatus?esc(String(r.currentStatus).replace(/_/g," ")):null)}
+    ${row("Availability",avail)}
+    ${row("Holds",holds)}
+    ${row("Fees",fees)}
+    ${row("Last free day",r.pickupLfd?fmtD(r.pickupLfd,tz):"Not reported")}
+    ${row("Yard location",r.locationAtTerminal?esc(r.locationAtTerminal):null)}
+    ${row("Pickup appointment",r.pickupAppointmentAt?fmtT(r.pickupAppointmentAt,tz):null)}
+    ${row("Last checked",checked||null)}
+  </dl><p class="note">Container, booking, holds, fees and last free day come from the Terminal49 API. Gate sensors, lanes and yard moves are simulated and marked as such.</p></div></div>`;
+}
 function renderAlert(A){
   const o=S.boxes.filter(b=>b.status==="side"&&isOpenInsp(b,A.get(b.id))).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
   $("alert").innerHTML=o.length?`<b>${o.length} inspection${o.length>1?"s":""} open</b><span>Stays active until an authorized result is recorded.</span>${o.slice(0,4).map(b=>`<button data-open="${esc(b.id)}">${esc(b.id)}</button>`).join("")}${o.length>4?`<span>+${o.length-4} more in the Inspect column</span>`:""}`:"";
 }
 
 /* ---------- state ---------- */
-let S=makeState();seedTraces(S);
+let S=null;
 let speed=1, acc=0, realStart=Date.now();
+/* Load the Terminal49 roster through /api/boxes (needs a server; a file:// open goes straight to the simulated roster). */
+async function boot(){
+  let data=null,note="";
+  if(location.protocol==="http:"||location.protocol==="https:"){
+    try{const r=await fetch("/api/boxes",{cache:"no-store"});const j=await r.json().catch(()=>({}));
+      if(r.ok&&Array.isArray(j.boxes)&&j.boxes.length)data=j;else note=j.hint||j.error||("HTTP "+r.status);
+    }catch(e){note="API not reachable"}
+  }
+  REAL=data;T49_NOTE=note;
+  initClock();S=makeState(REAL);seedTraces(S);acc=0;realStart=Date.now();render();
+}
+function renderFoot(){
+  const n=S.boxes.length;
+  const txt=S.live?`Live roster: ${n} containers tracked in Terminal49, fetched ${fmtT(S.fetchedAt)||"just now"}. Gate sensors, lanes and yard moves are simulated. Trust order: hold > sensors that agree > carrier and shipper declarations.`
+    :`Simulated shift, ${n} example boxes.${T49_NOTE?" Terminal49 roster unavailable: "+T49_NOTE:""} Trust order: customs hold > sensors that agree > carrier and shipper declarations.`;
+  const el=$("foot");if(el&&el.textContent!==txt)el.textContent=txt;
+}
 const SPEEDS=[[0,"Pause"],[1,"Live"],[10,"10×"],[60,"60×"]];
 function renderClock(){
   const simSec=START*60+START_SEC+S.t*60+acc;
@@ -927,6 +1029,7 @@ function renderClock(){
   $("speed").innerHTML=SPEEDS.map(([v,l])=>`<button class="seg" data-speed="${v}" aria-pressed="${speed===v}">${l}</button>`).join("");
 }
 setInterval(()=>{
+  if(!S)return;
   if(speed>0){acc+=speed;let n=0;while(acc>=TICK*60){acc-=TICK*60;step(S,"triage",S.log);n++}
     if(n){render();return}}
   renderClock();
@@ -944,19 +1047,19 @@ function reasons(b,a){
   const r=[];
   if(b.reefer&&(!b.power||b.fault)&&a.mtb<120)r.push(a.mtb===0?`<b>Reefer past limit</b> at ${deg(b.temp)}`:`<b>Reefer warming</b>, ${dur(a.mtb)} to limit`);
   if(a.flags.misdeclared)r.push(`<b>Says empty</b>, weighs ${(b.scale/1000).toFixed(1)} t`);
-  if(b.hold)r.push(`<b>Customs hold</b>, ${esc(b.holdReason.toLowerCase())}`);
+  if(b.hold)r.push(`<b>${holdTitle(b)}</b>, ${esc(b.holdReason)}`);
   if(a.flags.vgm)r.push(`<b>Weight off</b> ${pct((b.scale-b.vgm)/b.vgm)} vs declared`);
   if(a.flags.reweigh)r.push(`<b>Scale ${b.scaleId} reads high</b>, re-weigh`);
   if(a.flags.ocr)r.push(`<b>Number unclear</b>, clerk to confirm`);
-  if(b.free<=0)r.push(`Charges running, ${usd(b.rate)}/h`);
-  if(b.cutoff<90)r.push(`Vessel cutoff in ${dur(b.cutoff)}`);
-  if(!r.length)r.push(`All clear, cutoff in ${dur(b.cutoff)}`);
+  if(b.free!=null&&b.free<=0)r.push(b.rate!=null?`Charges running, ${usd(b.rate)}/h`:b.charges?`Past free day, fees ${usd(b.charges)}`:"Past last free day");
+  if(b.cutoff!=null&&b.cutoff<90)r.push(`Vessel cutoff in ${dur(b.cutoff)}`);
+  if(!r.length)r.push(b.cutoff!=null?`All clear, cutoff in ${dur(b.cutoff)}`:b.free!=null&&b.free>0?`All clear, ${dur(b.free)} free time left`:"All clear");
   return r;
 }
 function reason(b,a){return reasons(b,a)[0]}
 function headline(b,act,a,ctx,lane){
   const ir=S.insp&&S.insp[b.id];
-  if(act==="INSPECT"&&ir&&ir.result==="PASS"&&b.hold)return "Inspection passed. Waiting for customs to release";
+  if(act==="INSPECT"&&ir&&ir.result==="PASS"&&b.hold)return `Inspection passed. Waiting for ${holdOwner(b)} to release`;
   if(act==="INSPECT"&&ir&&ir.result==="FAIL")return "Inspection failed. Keep on hold and tell the shipper";
   if(act==="INSPECT")return b.reefer?(b.power&&!b.fault?"Hold in the powered bay for inspection":"Plug in, then hold for inspection"):"Pull aside for inspection";
   if(act==="REROUTE")return (b.reefer&&!a.flags.reweigh)?"Fast-track to a powered rack":`Re-weigh at ${ctx.goodScale}`;
@@ -979,6 +1082,7 @@ function render(){
   renderBoard(ctx,A);
   renderLog();
   renderDrawer(ctx,A,laneFor);
+  renderFoot();
 }
 
 function renderLanes(ctx){
@@ -1055,19 +1159,20 @@ function renderDrawer(ctx,A,laneFor){
   host.innerHTML=`<div class="scrim" data-close="1"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="Box ${esc(b.id)}">
     ${locked?`<div class="redbar">INSPECTION REQUIRED · ${esc(failReason(b,a))}. This alert stays active until an authorized result is recorded.</div>`:""}
-    <div class="dtop"><div><div class="id">${esc(b.id)}</div><div class="meta">${b.size} · ${b.reefer?"reefer":"dry"} · ${esc(status)}</div><div class="meta">Last update ${lastT!==null?clock(lastT):"none"}${stale?' <span class="tag stale">STALE</span>':""}</div></div>
+    <div class="dtop"><div><div class="id">${esc(b.id)}</div><div class="meta">${b.size} · ${b.reefer?"reefer":"dry"}${b.t49&&b.t49.shipment&&(b.t49.shipment.carrierShort||b.t49.shipment.scac)?" · "+esc(b.t49.shipment.carrierShort||b.t49.shipment.scac):""} · ${esc(status)}</div><div class="meta">Last update ${lastT!==null?clock(lastT):"none"}${stale?' <span class="tag stale">STALE</span>':""}</div></div>
       <button class="close" id="closeBtn" data-close="1">Close</button></div>
     <div class="verdict c-${done?"RELEASE":act}">
       <span class="pill a-${done?"DONE":act}">${done?"Done":act}</span>
       <div class="dest">${done?(gone?esc(status):"No action needed."):esc(headline(b,act,a,ctx,lane))}</div>
       ${ovr&&!done?`<div class="ovnote">You set this. The app suggested ${a.action}. <button class="linkbtn" data-ov="AUTO">Use suggestion</button></div>`:""}
     </div>
+    ${t49Panel(b)}
     ${weightCard(b,a,ctx)}
     ${inspMode?processHtml(b,a):done?"":`<div class="dsec"><h4>What to do</h4><ol class="steps">${stepsFor(b,act,a,ctx,lane).map(s=>`<li>${esc(s)}</li>`).join("")}</ol></div>`}
     ${(b.reefer||b.hold)?`<div class="pair">${reeferPanel(b)}${blePanel(b)}</div>`:""}
     <div class="dsec"><h4>Why</h4><ul class="whylist">${a.findings.map(f=>`<li class="${f.sev}"><div><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div></li>`).join("")}</ul></div>
     ${done?"":`<div class="dsec"><h4>Change action</h4><div class="ov">${ACTIONS.map(x=>`<button class="ovb ${x}" data-ov="${x}" aria-pressed="${act===x}" ${(x==="RELEASE"&&b.hold)||(locked&&x!=="INSPECT")?"disabled":""}>${x}</button>`).join("")}</div>
-      ${locked?`<div class="ovnote">Other actions are locked until an authorized inspector records a pass.</div>`:""}${b.hold?`<div class="ovnote">Release is locked while customs holds the box.</div>`:""}</div>`}
+      ${locked?`<div class="ovnote">Other actions are locked until an authorized inspector records a pass.</div>`:""}${b.hold?`<div class="ovnote">Release is locked while the ${holdTitle(b).toLowerCase()} is active.</div>`:""}</div>`}
     <div class="dsec"><h4>Journey: truck to ship</h4>${journeyHtml(b,a)}</div>
     <details class="sub"><summary>Who to trust: every source</summary><div class="tablewrap"><table class="src"><thead><tr><th>Source</th><th>Reading</th><th>Kind</th><th>Trust</th></tr></thead><tbody>${sourcesRows(b,a,ctx)}</tbody></table></div></details>
     <details class="sub"><summary>How the score is worked out</summary>
@@ -1084,6 +1189,7 @@ function closeBox(){openId=null;render();if(lastFocus&&document.contains(lastFoc
 document.addEventListener("change",e=>{if(e.target.id==="opSel"){opSel=e.target.value;opNote=""}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&openId)closeBox()});
 document.addEventListener("click",e=>{
+  if(!S)return;
   const sf=e.target.closest("[data-sf]");
   if(sf){sigFilter=+sf.dataset.sf===sigFilter&&+sf.dataset.sf!==0?0:+sf.dataset.sf;render();if(sf.classList.contains("stage"))$("sigpanel").scrollIntoView({behavior:"smooth",block:"start"});return}
   const sp=e.target.closest("[data-speed]");
@@ -1108,11 +1214,11 @@ document.addEventListener("click",e=>{
     if(k==="REINSPECT"){r.result="PENDING";r.disp=null}
     else{r.disp={type:k,label:LB[k],operator:opSel,at:S.t};
       if(k==="CORRECTED"&&b.vgm){r.origVgm=r.origVgm||b.vgm;b.vgm=Math.round(b.scale/10)*10;r.result="PENDING"}
-      if(k==="ROLL")b.cutoff+=720;
+      if(k==="ROLL"&&b.cutoff!=null)b.cutoff+=720;
       if(k==="RETURN"||k==="REJECT"){b.status=k==="RETURN"?"returned":"rejected";b.exitAt=S.t;addTrace(S,b,2,"rule",LB[k])}}
     S.log.push({t:S.t,text:`${op}: ${LB[k]} for ${b.id}.`});render();return}
   if(el.dataset.customs){const b=S.boxes.find(x=>x.id===openId);if(!b)return;
-    b.hold=false;addTrace(S,b,1,"customs","Customs: released for export (simulated feed)");S.log.push({t:S.t,text:`Customs released ${b.id}.`});
+    const ht=holdTitle(b);b.hold=false;addTrace(S,b,1,b.t49?"t49":"customs",`${ht} released (simulated)`);S.log.push({t:S.t,text:`${ht} released for ${b.id} (simulated).`});
     if(INS(b.id).result==="PASS"&&b.status==="side")clearInspection(S,b,context(S.boxes),S.t,S.log);
     render();return}
   if(el.dataset.ov){const b=S.boxes.find(x=>x.id===openId);if(!b)return;
@@ -1120,15 +1226,15 @@ document.addEventListener("click",e=>{
     if(el.dataset.ov==="AUTO")delete S.overrides[b.id];
     else{if(el.dataset.ov==="RELEASE"&&b.hold)return;S.overrides[b.id]=el.dataset.ov;S.log.push({t:S.t,text:`Planner set ${b.id} to ${el.dataset.ov.toLowerCase()}.`})}
     render();return}
-  if(el.dataset.reset){initClock();S=makeState();seedTraces(S);acc=0;realStart=Date.now();openId=null;sigFilter=0;render();return}
+  if(el.dataset.reset){initClock();S=makeState(REAL);seedTraces(S);acc=0;realStart=Date.now();openId=null;sigFilter=0;render();return}
 });
 
 document.documentElement.setAttribute("data-theme","light");
-function failOwner(b,a){return a.flags.vgm?"Shipper":b.hold?"Customs":a.flags.misdeclared?"Carrier / shipper":"Shipper / surveyor"}
+function failOwner(b,a){return a.flags.vgm?"Shipper":b.hold?(b.holdBy==="freight"||b.holdBy==="line"?"Shipping line":b.holdBy==="TMF"||b.holdBy==="other"?"Terminal":"Customs"):a.flags.misdeclared?"Carrier / shipper":"Shipper / surveyor"}
 function failBlock(b,a){
   const r=INS(b.id),own=failOwner(b,a),late=r.at!==undefined&&S.t-r.at>30;
   const D=[["REINSPECT","Re-inspect"],...(a.flags.vgm?[["CORRECTED","Corrected VGM received"]]:[]),["ROLL","Roll to next vessel"],["RETURN","Return to shipper"],["REJECT","Reject cargo"]];
-  return `Failed: stays in the Inspect lane. Not released to the yard or load-out.<br>Owner: <b>${own}</b> · charges attributed to ${own}${late?' <span class="tag stale">ESCALATED: no disposition after 30 min</span>':""}${b.cutoff<90?`<br><span class="tag stale">CUTOFF IN ${dur(b.cutoff)}: decide on rollover</span>`:""}${r.disp?`<br>Disposition: <b>${esc(r.disp.label)}</b> · ${esc(r.disp.operator)} · ${clock(r.disp.at)}`:""}<div class="resbar">${D.map(([k,l])=>`<button data-disp="${k}">${l}</button>`).join("")}</div>`;
+  return `Failed: stays in the Inspect lane. Not released to the yard or load-out.<br>Owner: <b>${own}</b> · charges attributed to ${own}${late?' <span class="tag stale">ESCALATED: no disposition after 30 min</span>':""}${b.cutoff!=null&&b.cutoff<90?`<br><span class="tag stale">CUTOFF IN ${dur(b.cutoff)}: decide on rollover</span>`:""}${r.disp?`<br>Disposition: <b>${esc(r.disp.label)}</b> · ${esc(r.disp.operator)} · ${clock(r.disp.at)}`:""}<div class="resbar">${D.map(([k,l])=>`<button data-disp="${k}">${l}</button>`).join("")}</div>`;
 }
 function inspChip(b){const r=S.insp&&S.insp[b.id],res=r?r.result:"PENDING",bb=bayOf(b);return `<span class="tag bay">${bb?bb.bay:(b.reefer?"IB-2":"IB-1")}</span><span class="tag res-${res}">${res}</span>`}
 function locLine(b){const l=lastEv(b,["uwb","ble","probe"]);const st=!l||S.t-l.t>STALE_MIN;return l?`Latest location event ${clock(l.t)} via ${DEV[l.dev]}${st?' <span class="tag stale">STALE: re-check RTLS or gateway</span>':" confirms the position"}`:"No location event: confirm by RTLS or gateway"}
@@ -1163,7 +1269,7 @@ const _ih=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
   Object.defineProperty(el,'innerHTML',{get(){return _ih.get.call(this)},set(v){setHTML(this,v)},configurable:true});
 });
 
-render();
+boot();
 })();
 </script>
 
