@@ -58,6 +58,9 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 
 /* do this now */
 .now{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.vcard .what{font-size:16px}.vcard .hdg{display:inline-block;transition:transform .4s;font-weight:700}
+.vcard .pos{font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
 .ncard{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
 .ncard:hover{border-color:var(--muted)}
 .ncard .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -400,6 +403,11 @@ button,.card,.ncard,.stage,.lane,.pill,.tag{transition:background-color .25s,col
   </section>
   <div class="vs" id="vs"></div>
 
+  <section id="fleetSec" hidden>
+    <div class="sechead"><h2 class="sec">Vessels this shift</h2><p>The ships these boxes are booked on. Position, speed and heading are live AIS from the Terminal49 API.</p></div>
+    <div class="fleet" id="fleet"></div>
+  </section>
+
   <section>
     <div class="sechead"><h2 class="sec">Truck to ship: 5 stages</h2><p>The hardware at each stage, and the latest signal it sent. Tap a stage to see its signals.</p></div>
     <div class="stages" id="stages"></div>
@@ -452,6 +460,7 @@ function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.i
 
 /* ---------- data ---------- */
 let REAL=null, T49_NOTE="";   // /api/boxes payload when the Terminal49 roster loaded, else null
+let FLEET=null, FLEET_NOTE=""; // /api/vessels payload as {list, byImo, account, fetchedAt}, else null
 function minutesUntil(iso){if(!iso)return null;const t=Date.parse(iso);return isFinite(t)?Math.round((t-Date.now())/60000):null}
 /* Terminal49 hold names -> the words the UI uses */
 const HOLD_LABEL={customs:"Customs hold",freight:"Freight hold",line:"Carrier release hold",USDA:"USDA hold",VACIS:"VACIS exam hold",TMF:"Terminal fee hold",other:"Terminal hold"};
@@ -493,12 +502,21 @@ function realBox(rec){
   }
   return b;
 }
-function makeState(realData){
+/* Book a box on one of its carrier's real ships (by the owner prefix of its number); a lessor's box rides any line. Stable per box. */
+function bookVessel(b,fleet){
+  if(!fleet||!fleet.list.length)return;
+  const scac=b.t49&&b.t49.shipment&&b.t49.shipment.scac||String(b.id).slice(0,4);
+  const own=fleet.list.filter(v=>v.scac===scac);
+  const pool=own.length?own:fleet.list;
+  b.imo=pool[hashId(b.id)%pool.length].imo;
+}
+function makeState(realData,fleet){
   const live=!!(realData&&Array.isArray(realData.boxes)&&realData.boxes.length);
   let boxes;
   if(live){const seen=new Set();boxes=[];for(const rec of realData.boxes){const b=realBox(rec);if(seen.has(b.id))continue;seen.add(b.id);boxes.push(b)}}
   else boxes=seededBoxes();
-  return {t:0,boxes,overrides:{},signals:[],live,fetchedAt:live?realData.fetchedAt:null,
+  for(const b of boxes)bookVessel(b,fleet);
+  return {t:0,boxes,overrides:{},signals:[],live,fetchedAt:live?realData.fetchedAt:null,fleet:fleet||null,
     lanes:[{id:"G1",up:true},{id:"G2",up:false,why:"OCR camera fault"},{id:"G3",up:true},{id:"G4",up:false,why:"Barrier jammed"},{id:"G5",up:false,why:"Power outage"},{id:"G6",up:true}],
     log:[{t:0,text:`Shift start. Lanes G2, G4, G5 down. ${boxes.length} boxes waiting at the gate${live?" (roster from Terminal49)":""}.`}]};
 }
@@ -506,7 +524,7 @@ function seededBoxes(){
   const r=rng(20261017);
   const pick=a=>a[Math.floor(r()*a.length)];
   const between=(a,b)=>a+r()*(b-a);
-  const owners=["MAEU","MSCU","CMAU","HLXU","OOLU","EGLU","ONEU","TGHU","COSU","YMLU","ZIMU","HMMU"];
+  const owners=["MAEU","MSCU","CMAU","HLXU","OOLU","EGLU","ONEU","TGHU","COSU","YMLU","HMMU"];
   const boxes=[{
     id:"MSKU 482193-7", size:"40RH", reefer:true, tare:4600, declared:"Empty", vgm:null,
     scale:21420, scaleId:"WB-1", loadCell:null, hold:true, holdReason:"X-ray referral", ocr:0.97,
@@ -724,7 +742,7 @@ function step(s,policy,log){
           const ref=b.vgm||b.scale;const d=(lc-ref)/ref;
           addTrace(s,b,5,"cocr",`QC-${1+hashId(b.id)%3} read ${b.id} mid-lift · matches load list`);
           addTrace(s,b,5,"cell",`Load cell ${kg(lc)} · ${pct(d)} vs ${b.vgm?"VGM":"gate scale"} · ${Math.abs(d)<=0.03?"OK":"CHECK"}`);
-          if(log)log.push({t:T,text:`${b.id} loaded on the vessel.`});
+          if(log){const v=s.fleet&&s.fleet.byImo[b.imo];log.push({t:T,text:`${b.id} loaded on ${v?v.name:"the vessel"}.`})}
         }
       }
     }
@@ -739,7 +757,7 @@ function step(s,policy,log){
 }
 
 function project(s,policy){
-  const c=JSON.parse(JSON.stringify({...s,signals:[],boxes:s.boxes.map(b=>({...b,trace:null})),log:[]}));
+  const c=JSON.parse(JSON.stringify({...s,signals:[],boxes:s.boxes.map(b=>({...b,trace:null})),log:[],fleet:null}));
   c.noTrace=true;
   const moved=b=>b.status==="gated"||b.status==="loaded";
   const g0=c.boxes.filter(moved).length;
@@ -765,6 +783,8 @@ function sourcesRows(b,a,ctx){
   rows.push(["Crane load cell",b.loadCell?kg(b.loadCell):"Not lifted yet","Measured",b.loadCell?["hi","High"]:["na","At load-out"],"Spreader load cell"+sim]);
   rows.push([b.holdBy&&b.holdBy!=="customs"?"Terminal holds":"Customs",b.hold?`Hold · ${b.holdReason}`:b.t49?"No active holds":"Clear","Legal",b.hold?["ov","Overrides all"]:["hi","Clear"],b.t49?"Terminal49 · terminal hold feed":"Customs release feed"]);
   if(b.reefer)rows.push(["Reefer probe",`${deg(b.temp)} · set ${deg(b.setpoint)} · ${!b.power?"no power":b.fault?"unit fault":"powered"}`,"Measured",["hi","High"],"BLE temp sensor + RTLS"+sim]);
+  const vv=vesselOf(b);
+  if(vv)rows.push(["Vessel AIS",`${vv.name} · ${vv.speedKn!=null?vv.speedKn+" kn":"speed n/a"} · fix ${vesselAge(vv)}`,"Measured",vesselStale(vv)?["sus","Stale fix"]:["hi","High"],"Terminal49 vessel API"]);
   rows.push(["Billing clock",b.free==null?"Last free day not reported":`${b.free<=0?dur(-b.free)+" past free time":dur(b.free)+" free"}${b.rate!=null?` · ${usd(b.rate)}/h`:b.charges?` · fees ${usd(b.charges)}`:""}`,"Contract",["na","—"],b.t49?"Terminal49 · last free day and fees":"Tariff"]);
   return rows.map(r=>`<tr><td><b>${esc(r[0])}</b><div class="sensor">${esc(r[4])}</div></td><td class="r">${esc(r[1])}</td><td><span class="kind">${r[2]}</span></td><td><span class="trust ${r[3][0]}">${esc(r[3][1])}</span></td></tr>`).join("");
 }
@@ -993,6 +1013,38 @@ function t49Panel(b){
     ${row("Last checked",checked||null)}
   </dl><p class="note">Container, booking, holds, fees and last free day come from the Terminal49 API. Gate sensors, lanes and yard moves are simulated and marked as such.</p></div></div>`;
 }
+function vesselOf(b){return S&&S.fleet&&b.imo?S.fleet.byImo[b.imo]||null:null}
+function vesselAgeMin(v){const t=Date.parse(v.positionAt||"");return isFinite(t)?Math.max(0,Math.round((Date.now()-t)/60000)):null}
+function vesselAge(v){const m=vesselAgeMin(v);return m==null?"time unknown":m<1?"just now":dur(m)+" ago"}
+function vesselStale(v){const m=vesselAgeMin(v);return m==null||m>12*60}
+function posText(v){if(v.lat==null||v.lon==null)return "position unknown";return `${Math.abs(v.lat).toFixed(2)}°${v.lat>=0?"N":"S"} ${Math.abs(v.lon).toFixed(2)}°${v.lon>=0?"E":"W"}`}
+function motionText(v){if(v.speedKn==null)return "speed unknown";return v.speedKn<0.5?"stopped, at berth or anchor":`underway ${v.speedKn} kn`+(v.headingDeg!=null?`, heading ${Math.round(v.headingDeg)}°`:"")}
+function vesselPanel(b){
+  const v=vesselOf(b);if(!v)return"";
+  const st=vesselStale(v);
+  return `<div class="dsec"><h4>Vessel <span class="st ${st?"warn":"ok"}">${st?"STALE AIS":"LIVE AIS"}</span></h4><div class="rpanel"><dl class="kv">
+    <dt>Ship</dt><dd>${esc(v.name||"n/a")} · IMO ${esc(v.imo)}${v.mmsi?" · MMSI "+esc(v.mmsi):""}</dd>
+    <dt>Carrier</dt><dd>${esc(v.carrier)} (${esc(v.scac)})</dd>
+    <dt>Position</dt><dd>${posText(v)}</dd>
+    <dt>Movement</dt><dd>${motionText(v)}</dd>
+    <dt>AIS fix</dt><dd>${v.positionAt?fmtT(v.positionAt)+" · "+vesselAge(v):"none"}${st?' <span class="tag stale">STALE</span>':""}</dd>
+    ${b.cutoff!=null?`<dt>Cutoff</dt><dd>${dur(b.cutoff)} (simulated)</dd>`:""}
+  </dl><p class="note">Ship identity, position, speed and heading come from the Terminal49 vessel API. The booking of this box to this ship and the cutoff clock are simulated.</p></div></div>`;
+}
+function renderFleet(){
+  const sec=$("fleetSec");if(!sec)return;
+  const f=S.fleet;if(!f||!f.list.length){sec.hidden=true;return}
+  sec.hidden=false;
+  const counts={};for(const b of S.boxes)if(b.imo)counts[b.imo]=(counts[b.imo]||0)+1;
+  const loaded={};for(const b of S.boxes)if(b.imo&&b.status==="loaded")loaded[b.imo]=(loaded[b.imo]||0)+1;
+  const list=f.list.filter(v=>counts[v.imo]).sort((x,y)=>(counts[y.imo]||0)-(counts[x.imo]||0)||String(x.name).localeCompare(String(y.name)));
+  $("fleet").innerHTML=list.map(v=>{const st=vesselStale(v);const n=counts[v.imo]||0,l=loaded[v.imo]||0;
+    return `<div class="ncard vcard"><div class="row"><span class="pill ${st?"a-SLOW":"a-RELEASE"}">${st?"STALE AIS":"LIVE AIS"}</span><span class="rank">${n} box${n===1?"":"es"}${l?` · ${l} loaded`:""}</span></div>
+      <div class="what">${esc(v.name||"IMO "+v.imo)}</div>
+      <div class="why">${esc(v.carrier)} (${esc(v.scac)}) · IMO ${esc(v.imo)}</div>
+      <div class="why"><span class="hdg" style="transform:rotate(${v.headingDeg!=null?Math.round(v.headingDeg):0}deg)" aria-hidden="true">↑</span> ${esc(motionText(v))}</div>
+      <div class="pos">${posText(v)} · fix ${esc(vesselAge(v))}</div></div>`}).join("");
+}
 function renderAlert(A){
   const o=S.boxes.filter(b=>b.status==="side"&&isOpenInsp(b,A.get(b.id))).sort((x,y)=>A.get(y.id).score-A.get(x.id).score);
   $("alert").innerHTML=o.length?`<b>${o.length} inspection${o.length>1?"s":""} open</b><span>Stays active until an authorized result is recorded.</span>${o.slice(0,4).map(b=>`<button data-open="${esc(b.id)}">${esc(b.id)}</button>`).join("")}${o.length>4?`<span>+${o.length-4} more in the Inspect column</span>`:""}`:"";
@@ -1002,20 +1054,26 @@ function renderAlert(A){
 let S=null;
 let speed=1, acc=0, realStart=Date.now();
 /* Load the Terminal49 roster through /api/boxes (needs a server; a file:// open goes straight to the simulated roster). */
+async function getJson(path){const r=await fetch(path,{cache:"no-store"});const j=await r.json().catch(()=>({}));return {ok:r.ok,status:r.status,j}}
 async function boot(){
-  let data=null,note="";
+  let data=null,note="",fleet=null,fnote="";
   if(location.protocol==="http:"||location.protocol==="https:"){
-    try{const r=await fetch("/api/boxes",{cache:"no-store"});const j=await r.json().catch(()=>({}));
-      if(r.ok&&Array.isArray(j.boxes)&&j.boxes.length)data=j;else note=j.hint||j.error||("HTTP "+r.status);
-    }catch(e){note="API not reachable"}
+    const [bx,vs]=await Promise.all([getJson("/api/boxes").catch(()=>null),getJson("/api/vessels").catch(()=>null)]);
+    if(bx&&bx.ok&&Array.isArray(bx.j.boxes)&&bx.j.boxes.length)data=bx.j;else note=bx?(bx.j.hint||bx.j.error||("HTTP "+bx.status)):"API not reachable";
+    if(vs&&vs.ok&&Array.isArray(vs.j.vessels)&&vs.j.vessels.length){const byImo={};for(const v of vs.j.vessels)byImo[v.imo]=v;fleet={list:vs.j.vessels,byImo,account:vs.j.account||null,fetchedAt:vs.j.fetchedAt||null}}
+    else fnote=vs?(vs.j.hint||vs.j.error||("HTTP "+vs.status)):"API not reachable";
   }
-  REAL=data;T49_NOTE=note;
-  initClock();S=makeState(REAL);seedTraces(S);acc=0;realStart=Date.now();render();
+  const trim=x=>String(x||"").replace(/\.+$/,"");
+  REAL=data;T49_NOTE=trim(note);FLEET=fleet;FLEET_NOTE=trim(fnote);
+  initClock();S=makeState(REAL,FLEET);seedTraces(S);acc=0;realStart=Date.now();render();
 }
+function planWord(p){return {free_plan:"free plan",in_trial:"trial",customer:"paid plan"}[p]||p||"plan n/a"}
 function renderFoot(){
-  const n=S.boxes.length;
-  const txt=S.live?`Live roster: ${n} containers tracked in Terminal49, fetched ${fmtT(S.fetchedAt)||"just now"}. Gate sensors, lanes and yard moves are simulated. Trust order: hold > sensors that agree > carrier and shipper declarations.`
-    :`Simulated shift, ${n} example boxes.${T49_NOTE?" Terminal49 roster unavailable: "+T49_NOTE:""} Trust order: customs hold > sensors that agree > carrier and shipper declarations.`;
+  const n=S.boxes.length,f=S.fleet;
+  const acct=f&&f.account?` Terminal49 account: ${f.account.company||"n/a"}, ${planWord(f.account.plan)}${f.account.slots&&f.account.slots.limit!=null?`, ${f.account.slots.used||0} of ${f.account.slots.limit} tracking slots used`:""}.`:"";
+  const ships=f?` Vessels: ${f.list.length} ships with live AIS positions from Terminal49, fetched ${fmtT(f.fetchedAt)||"just now"}.`:(FLEET_NOTE?` Terminal49 vessels unavailable: ${FLEET_NOTE}.`:"");
+  const txt=S.live?`Live roster: ${n} containers tracked in Terminal49, fetched ${fmtT(S.fetchedAt)||"just now"}.${ships} Gate sensors, lanes and yard moves are simulated.${acct} Trust order: hold > sensors that agree > carrier and shipper declarations.`
+    :`Simulated shift, ${n} example boxes${f?" (container reads need a paid Terminal49 plan)":T49_NOTE?"; Terminal49 roster unavailable: "+T49_NOTE:""}.${ships}${acct} Trust order: customs hold > sensors that agree > carrier and shipper declarations.`;
   const el=$("foot");if(el&&el.textContent!==txt)el.textContent=txt;
 }
 const SPEEDS=[[0,"Pause"],[1,"Live"],[10,"10×"],[60,"60×"]];
@@ -1077,6 +1135,7 @@ function render(){
   renderAlert(A);
   renderNow(ctx,A,laneFor);
   renderSummary(A);
+  renderFleet();
   renderStages();
   renderSignals();
   renderBoard(ctx,A);
@@ -1167,6 +1226,7 @@ function renderDrawer(ctx,A,laneFor){
       ${ovr&&!done?`<div class="ovnote">You set this. The app suggested ${a.action}. <button class="linkbtn" data-ov="AUTO">Use suggestion</button></div>`:""}
     </div>
     ${t49Panel(b)}
+    ${vesselPanel(b)}
     ${weightCard(b,a,ctx)}
     ${inspMode?processHtml(b,a):done?"":`<div class="dsec"><h4>What to do</h4><ol class="steps">${stepsFor(b,act,a,ctx,lane).map(s=>`<li>${esc(s)}</li>`).join("")}</ol></div>`}
     ${(b.reefer||b.hold)?`<div class="pair">${reeferPanel(b)}${blePanel(b)}</div>`:""}
@@ -1226,7 +1286,7 @@ document.addEventListener("click",e=>{
     if(el.dataset.ov==="AUTO")delete S.overrides[b.id];
     else{if(el.dataset.ov==="RELEASE"&&b.hold)return;S.overrides[b.id]=el.dataset.ov;S.log.push({t:S.t,text:`Planner set ${b.id} to ${el.dataset.ov.toLowerCase()}.`})}
     render();return}
-  if(el.dataset.reset){initClock();S=makeState(REAL);seedTraces(S);acc=0;realStart=Date.now();openId=null;sigFilter=0;render();return}
+  if(el.dataset.reset){initClock();S=makeState(REAL,FLEET);seedTraces(S);acc=0;realStart=Date.now();openId=null;sigFilter=0;render();return}
 });
 
 document.documentElement.setAttribute("data-theme","light");
@@ -1264,7 +1324,7 @@ function setHTML(el,html){
   const t=document.createElement(el.tagName);t.innerHTML=html;morph(el,t);
 }
 const _ih=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
-["clock","speed","lanes","now","summary","vs","stages","sigchips","signals","board","log","drawerHost","alert"].forEach(id=>{
+["clock","speed","lanes","now","summary","vs","fleet","stages","sigchips","signals","board","log","drawerHost","alert"].forEach(id=>{
   const el=document.getElementById(id);if(!el)return;
   Object.defineProperty(el,'innerHTML',{get(){return _ih.get.call(this)},set(v){setHTML(this,v)},configurable:true});
 });
